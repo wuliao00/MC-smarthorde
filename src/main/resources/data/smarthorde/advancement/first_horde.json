@@ -1,0 +1,1 @@
+{"criteria":{"triggered":{"conditions":{},"trigger":"minecraft:tick"}},"display":{"announce_to_chat":true,"description":{"translate":"advancements.smarthorde.first_horde.description"},"frame":"task","hidden":false,"icon":{"id":"minecraft:zombie_head"},"show_toast":true,"title":{"translate":"advancements.smarthorde.first_horde.title"}},"requirements":[["triggered"]]}

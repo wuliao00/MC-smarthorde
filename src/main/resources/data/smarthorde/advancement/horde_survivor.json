@@ -1,0 +1,1 @@
+{"criteria":{"triggered":{"conditions":{},"trigger":"minecraft:tick"}},"display":{"announce_to_chat":true,"description":{"translate":"advancements.smarthorde.horde_survivor.description"},"frame":"goal","hidden":false,"icon":{"id":"minecraft:netherite_sword"},"show_toast":true,"title":{"translate":"advancements.smarthorde.horde_survivor.title"}},"requirements":[["triggered"]]}
