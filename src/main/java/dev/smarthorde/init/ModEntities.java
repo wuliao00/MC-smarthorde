@@ -58,15 +58,14 @@ public final class ModEntities {
 
     @SubscribeEvent
     public static void onSpawnPlacement(RegisterSpawnPlacementsEvent event) {
-        // ON_GROUND 放置 + 亮度<=7 的怪物生成规则（Monster.checkMonsterSpawnRules 内部校验光照）。
-        // ADD 不覆盖其他 mod 对同一实体的放置规则，兼容性更好
+        // ON_GROUND 放置 + 亮度<=7 的怪物生成规则（Monster.checkMonsterSpawnRules 内部校验光照）
         event.register(SMART_ZOMBIE.get(), SpawnPlacementTypes.ON_GROUND,
                 Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
                 SmartZombie::checkSmartZombieSpawnRules,
-                RegisterSpawnPlacementsEvent.Operation.ADD);
+                RegisterSpawnPlacementsEvent.Operation.REPLACE);
         event.register(HORDE_BOSS.get(), SpawnPlacementTypes.ON_GROUND,
                 Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
                 HordeBoss::checkHordeBossSpawnRules,
-                RegisterSpawnPlacementsEvent.Operation.ADD);
+                RegisterSpawnPlacementsEvent.Operation.REPLACE);
     }
 }

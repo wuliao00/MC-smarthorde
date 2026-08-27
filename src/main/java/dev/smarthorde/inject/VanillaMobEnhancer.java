@@ -20,6 +20,7 @@ import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -95,10 +96,13 @@ public final class VanillaMobEnhancer {
 
     private static void upgradeBrain(Zombie zombie) {
         // 1. 用 SmartTargetGoal 替换原版的玩家目标选择器（村民/其他敌对目标不受影响）
-        List<WrappedGoal> playerTargeters = zombie.targetSelector.getAvailableGoals()
-                .filter(goal -> goal.getPriority() <= PLAYER_TARGET_PRIORITY
-                        && goal.getGoal() instanceof NearestAttackableTargetGoal)
-                .toList();
+        List<WrappedGoal> playerTargeters = new ArrayList<>();
+        for (WrappedGoal goal : zombie.targetSelector.getAvailableGoals()) {
+            if (goal.getPriority() <= PLAYER_TARGET_PRIORITY
+                    && goal.getGoal() instanceof NearestAttackableTargetGoal) {
+                playerTargeters.add(goal);
+            }
+        }
         for (WrappedGoal goal : playerTargeters) {
             zombie.targetSelector.removeGoal(goal.getGoal());
         }
