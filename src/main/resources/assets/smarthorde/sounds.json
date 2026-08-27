@@ -1,0 +1,32 @@
+{
+  "horde_wave_start": {
+    "subtitle": "subtitle.smarthorde.horde_wave_start",
+    "sounds": [
+      { "name": "smarthorde:horde_wave_start", "stream": true }
+    ]
+  },
+  "horde_wave_clear": {
+    "subtitle": "subtitle.smarthorde.horde_wave_clear",
+    "sounds": [
+      { "name": "smarthorde:horde_wave_clear" }
+    ]
+  },
+  "boss_phase_change": {
+    "subtitle": "subtitle.smarthorde.boss_phase_change",
+    "sounds": [
+      { "name": "smarthorde:boss_phase_change", "stream": true }
+    ]
+  },
+  "smart_dodge": {
+    "subtitle": "subtitle.smarthorde.smart_dodge",
+    "sounds": [
+      { "name": "smarthorde:smart_dodge" }
+    ]
+  },
+  "smart_attack": {
+    "subtitle": "subtitle.smarthorde.smart_attack",
+    "sounds": [
+      { "name": "smarthorde:smart_attack" }
+    ]
+  }
+}

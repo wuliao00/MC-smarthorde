@@ -1,0 +1,27 @@
+modLoader = "javafml"
+loaderVersion = "[4,)"
+license = "MIT"
+
+[[mods]]
+modId = "smarthorde"
+version = "1.0.0"
+displayName = "SmartHorde"
+authors = "SmartHorde Dev"
+description = '''
+Smart zombie horde mod: tactical AI zombies (telegraphed melee, dodge, flank, wall-climb),
+a phased Horde Boss with BossBar, wave defence events and vanilla zombie injection.
+'''
+
+[[dependencies.smarthorde]]
+modId = "neoforge"
+type = "required"
+versionRange = "[21.1,)"
+ordering = "NONE"
+side = "BOTH"
+
+[[dependencies.smarthorde]]
+modId = "minecraft"
+type = "required"
+versionRange = "[1.21.1,1.22)"
+ordering = "NONE"
+side = "BOTH"
