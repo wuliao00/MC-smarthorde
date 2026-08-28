@@ -45,6 +45,11 @@ public class DodgeGoal extends Goal {
         if (this.mob.tickCount < this.nextDodgeTick || !this.mob.onGround()) {
             return false;
         }
+        // 受击闪避（源 1）无 AABB 扫描成本，保持即时响应；
+        // 弓手/箭矢威胁为 48/8 格 AABB 扫描，随机节流：约每 10 tick 执行一次实际扫描
+        if (this.mob.hurtTime <= 5 && this.mob.getRandom().nextInt(10) != 0) {
+            return false;
+        }
         return findDodgeVector() != null;
     }
 

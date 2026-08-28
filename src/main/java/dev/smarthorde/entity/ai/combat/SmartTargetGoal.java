@@ -28,6 +28,12 @@ public class SmartTargetGoal extends TargetGoal {
 
     @Override
     public boolean canUse() {
+        // 随机节流：约每 10 tick 执行一次目标扫描（与原版 NearestAttackableTargetGoal
+        // 的 randomInterval 相同模式）；已锁定目标的维持由 TargetGoal#canContinueToUse
+        // 负责，不受本节流影响，目标记忆逻辑保持正确
+        if (this.mob.getRandom().nextInt(10) != 0) {
+            return false;
+        }
         double range = this.mob.getAttributeValue(Attributes.FOLLOW_RANGE);
         AABB searchBox = this.mob.getBoundingBox().inflate(range, range / 2, range);
         List<Player> candidates = this.mob.level().getEntitiesOfClass(Player.class, searchBox,

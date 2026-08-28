@@ -20,10 +20,10 @@ public final class DifficultyManager {
     private static final Logger LOGGER = LoggerFactory.getLogger("DifficultyManager");
 
     public enum Preset {
-        EASY(0.70, 0.80, 1.00, 1.40),
-        NORMAL(1.00, 1.00, 1.00, 1.00),
-        HARD(1.40, 1.25, 1.10, 0.75),
-        NIGHTMARE(1.80, 1.50, 1.20, 0.50);
+        EASY(0.70, 0.80, 1.00, 1.00, 1.40),
+        NORMAL(1.00, 1.00, 1.00, 1.00, 1.00),
+        HARD(1.40, 1.25, 1.10, 1.10, 0.75),
+        NIGHTMARE(1.80, 1.50, 1.20, 1.20, 0.50);
 
         /** 血量倍率 */
         public final double healthMul;
@@ -31,13 +31,16 @@ public final class DifficultyManager {
         public final double damageMul;
         /** 移动速度倍率 */
         public final double speedMul;
+        /** 攻击速度倍率（独立于移动速度缩放，便于单独调整；默认与 speedMul 同值保持旧行为） */
+        public final double attackSpeedMul;
         /** 闪避冷却倍率（越低闪避越频繁） */
         public final double dodgeCooldownMul;
 
-        Preset(double healthMul, double damageMul, double speedMul, double dodgeCooldownMul) {
+        Preset(double healthMul, double damageMul, double speedMul, double attackSpeedMul, double dodgeCooldownMul) {
             this.healthMul = healthMul;
             this.damageMul = damageMul;
             this.speedMul = speedMul;
+            this.attackSpeedMul = attackSpeedMul;
             this.dodgeCooldownMul = dodgeCooldownMul;
         }
     }
@@ -78,7 +81,7 @@ public final class DifficultyManager {
         }
         scale(monster, Attributes.ATTACK_DAMAGE, preset.damageMul);
         scale(monster, Attributes.MOVEMENT_SPEED, preset.speedMul);
-        scale(monster, Attributes.ATTACK_SPEED, preset.speedMul);
+        scale(monster, Attributes.ATTACK_SPEED, preset.attackSpeedMul);
     }
 
     public static int dodgeCooldownTicks() {

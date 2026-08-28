@@ -2,6 +2,7 @@ package dev.smarthorde.entity.ai.combat;
 
 import dev.smarthorde.config.SmartHordeConfig;
 import dev.smarthorde.effects.EffectManager;
+import dev.smarthorde.entity.HordeBoss;
 import dev.smarthorde.entity.SmartZombie;
 import dev.smarthorde.init.ModSounds;
 import net.minecraft.core.particles.ParticleTypes;
@@ -11,6 +12,8 @@ import net.minecraft.util.Mth;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.ai.goal.Goal;
+import net.minecraft.world.entity.animal.Animal;
+import net.minecraft.world.entity.npc.Villager;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.EnumSet;
@@ -184,7 +187,14 @@ public class SmartMeleeAttackGoal extends Goal {
 
         List<LivingEntity> victims = serverLevel.getEntitiesOfClass(LivingEntity.class,
                 this.mob.getBoundingBox().inflate(reach),
-                v -> v != this.mob && v.isAlive() && !(v instanceof SmartZombie) && !v.isAlliedTo(this.mob));
+                v -> v != this.mob && v.isAlive()
+                        // 排除己方（SmartZombie/HordeBoss 均为 mod 实体），避免尸潮中 Boss 被误伤
+                        && !(v instanceof SmartZombie)
+                        && !(v instanceof HordeBoss)
+                        // 排除村民与动物类，避免无差别命中被动实体
+                        && !(v instanceof Villager)
+                        && !(v instanceof Animal)
+                        && !v.isAlliedTo(this.mob));
 
         for (LivingEntity victim : victims) {
             Vec3 toVictim = flatten(victim.position().subtract(this.mob.position()));

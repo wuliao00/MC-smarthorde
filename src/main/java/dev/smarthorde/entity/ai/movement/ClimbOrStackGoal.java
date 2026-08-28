@@ -62,9 +62,12 @@ public class ClimbOrStackGoal extends Goal {
 
     /** 更高的墙：骑上 1.5 格内同类实体叠罗汉抬升高度。 */
     private void tryStack() {
+        // 过滤候选者：排除自身/死亡实体、已在他人身上者（不能当坐骑）、
+        // 以及已有 ≥2 个乘客者（与下方“限制两层”一致）；
+        // 注意检查的是候选实体的乘客数，而非 mob 自己的（原实现此处语义错位）
         List<? extends PathfinderMob> candidates = this.mob.level().getEntitiesOfClass(this.mob.getClass(),
                 this.mob.getBoundingBox().inflate(STACK_SEARCH_RANGE),
-                e -> e != this.mob && e.isAlive() && !e.isPassenger() && this.mob.getPassengers().isEmpty());
+                e -> e != this.mob && e.isAlive() && !e.isPassenger() && e.getPassengers().size() < 2);
         if (candidates.isEmpty()) {
             return;
         }

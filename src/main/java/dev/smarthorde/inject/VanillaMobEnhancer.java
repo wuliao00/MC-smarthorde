@@ -52,6 +52,10 @@ public final class VanillaMobEnhancer {
 
     @SubscribeEvent
     public static void onEntityJoinLevel(EntityJoinLevelEvent event) {
+        // 其他 mod 可能取消本次入世（如自定义生成逻辑），取消时不再注入
+        if (event.isCanceled()) {
+            return;
+        }
         if (event.getLevel().isClientSide()) {
             return;
         }

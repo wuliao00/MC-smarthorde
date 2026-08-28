@@ -224,6 +224,7 @@ public final class HordeWaveManager {
                 session.currentWave + 1,
                 session.totalWaves,
                 session.remainingMobs(),
+                // phase：WaveState 的 ordinal 序数值，编码契约见 HordeSyncPacket 类注释
                 session.state.ordinal(),
                 countdownSeconds);
         PacketDistributor.sendToPlayer(player, packet);

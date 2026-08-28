@@ -4,7 +4,8 @@ license = "MIT"
 
 [[mods]]
 modId = "smarthorde"
-version = "1.0.0"
+# 构建时由 processResources 展开（见 build.gradle），取 gradle.properties 中的 mod_version
+version = "${mod_version}"
 displayName = "SmartHorde"
 authors = "SmartHorde Dev"
 description = '''

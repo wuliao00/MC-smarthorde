@@ -18,6 +18,14 @@ base {
     archivesName = project.mod_id
 }
 
+// 将 gradle.properties 中的 mod_version 展开到 neoforge.mods.toml 的 ${mod_version} 占位符
+tasks.named('processResources') {
+    inputs.property 'version', mod_version
+    filesMatching('META-INF/neoforge.mods.toml') {
+        expand 'mod_version': mod_version
+    }
+}
+
 java {
     toolchain {
         languageVersion = JavaLanguageVersion.of(21)
@@ -42,4 +50,14 @@ neoForge {
             sourceSet(sourceSets.main)
         }
     }
+}
+
+dependencies {
+    testImplementation platform('org.junit:junit-bom:5.10.2')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+tasks.named('test', Test) {
+    useJUnitPlatform()
 }

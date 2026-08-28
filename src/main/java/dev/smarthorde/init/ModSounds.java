@@ -9,8 +9,9 @@ import net.neoforged.neoforge.registries.DeferredHolder;
 import net.neoforged.neoforge.registries.DeferredRegister;
 
 /**
- * 音效注册。实际音频在 assets/smarthorde/sounds.json 中引用 minecraft: 命名空间占位音效，
- * 后续替换自定义 .ogg 时只需修改 sounds.json。
+ * 音效注册。实际音频为 assets/smarthorde/sounds/*.ogg（程序化合成的 Vorbis 自有文件，
+ * 44.1kHz 单声道），由 assets/smarthorde/sounds.json 索引；
+ * 替换音频时只需更换 .ogg 文件或重跑 tools/gen_assets.py。
  */
 public final class ModSounds {
 

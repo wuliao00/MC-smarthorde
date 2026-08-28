@@ -13,19 +13,16 @@ Minecraft **1.21.1** / NeoForge **21.1.x** 模组：战术化智能僵尸、阶�
 ## 环境要求
 
 - JDK **21**（构建工具链已由 Gradle 自动解析，`foojay-resolver` 插件会按需下载）
-- Gradle **8.9+**（若仓库中无 gradle wrapper，先执行 `gradle wrapper --gradle-version 8.9` 生成，或直接使用本机安装的 Gradle）
-
-> 本代码包不含 gradle wrapper 二进制（`gradle/wrapper/gradle-wrapper.jar`），
-> 请用上述命令生成后即可使用 `./gradlew build`（Windows 为 `gradlew.bat build`）。
+- Gradle **8.9+**（仓库已自带 gradle wrapper，配置为官方源 gradle-8.9-bin.zip，首次构建时自动下载发行版）
 
 ## 构建与安装
 
 ```bash
 ./gradlew build
-# 产物：build/libs/smarthorde-1.0.0.jar
+# 产物：build/libs/smarthorde-<版本>.jar（当前 1.0.1）
 ```
 
-将 jar 复制到 `.minecraft/mods/`，**删除 Sodium**（避免实体渲染冲突），启动游戏。
+将 jar 复制到 `.minecraft/mods/`，启动游戏。若同时使用 Sodium 等渲染优化 mod 且实体渲染出现异常，见下方「故障排查」的兼容性排查建议。
 
 ### 游戏内验证
 
@@ -62,7 +59,7 @@ Minecraft **1.21.1** / NeoForge **21.1.x** 模组：战术化智能僵尸、阶�
 2. **时间与光照**：智能僵尸沿用原版僵尸的生成规则 —— 主世界亮度 ≤ 7 才会生成，白天主要在洞穴、夜晚在露天出现。用 F3 调试屏看脚下 Light 值。
 3. **生成权重**：生物群系修改器对所有主世界群系注册 weight=100、每组 1~4 只，与原版僵尸同池竞争；如果地形上其他敌对生物密集，MONSTER 刷新上限可能被占满。
 4. **快速验证**：直接 `/smarthorde summon 5`（近距环形）或 `/smarthorde wave start 3`（24~32 格环形），先确认实体本身正常再谈自然生成。
-5. **Sodium**：请移除 Sodium，它会对自定义实体的模型层/渲染层产生冲突。
+5. **Sodium 等渲染优化 mod**：Sodium 理论上可正常共存；若自定义实体的模型层/渲染层出现异常（贴图错位、渲染缺失等），可先单独移除 Sodium 做对照排查：若移除后恢复正常，则属环境相关冲突，可尝试更新 Sodium 至最新版或向本 mod 反馈；若移除后仍异常，则问题出在其他处。
 6. **数据包加载**：本 mod 的自然生成走 `data/smarthorde/neoforge/biome_modifier/` 数据驱动文件；若你手动改过 world datapacks 或禁用了 mod 数据包，需要重新启用并重启存档。
 
 ### 亡灵杀手（Smite）打不出额外伤害？
