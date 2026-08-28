@@ -58,16 +58,16 @@ public class HordeBoss extends Zombie {
     /** Boss 变体定义 */
     public enum Variant {
         //        id        血量  伤害 攻速  护甲加成 仆从基数 命中效果
-        BRUTE("brute", 1.00, 1.00, 1.00, 0, 2, HitEffect.KNOCKBACK,
+        BRUTE("brute", 1.00, 1.00, 1.00, 0, 4, HitEffect.KNOCKBACK,
                 new BossEvent.BossBarColor[]{BossEvent.BossBarColor.WHITE, BossEvent.BossBarColor.BLUE, BossEvent.BossBarColor.PURPLE, BossEvent.BossBarColor.RED},
                 null),
-        PLAGUE("plague", 0.85, 0.85, 1.00, 2, 3, HitEffect.POISON,
+        PLAGUE("plague", 0.85, 0.85, 1.00, 2, 5, HitEffect.POISON,
                 new BossEvent.BossBarColor[]{BossEvent.BossBarColor.GREEN, BossEvent.BossBarColor.YELLOW, BossEvent.BossBarColor.GREEN, BossEvent.BossBarColor.PURPLE},
                 ParticleTypes.SNEEZE),
-        FROST("frost", 1.15, 0.90, 0.90, 6, 2, HitEffect.SLOWNESS,
+        FROST("frost", 1.15, 0.90, 0.90, 6, 4, HitEffect.SLOWNESS,
                 new BossEvent.BossBarColor[]{BossEvent.BossBarColor.BLUE, BossEvent.BossBarColor.WHITE, BossEvent.BossBarColor.BLUE, BossEvent.BossBarColor.PURPLE},
                 ParticleTypes.SNOWFLAKE),
-        INFERNO("inferno", 1.00, 1.10, 1.25, 0, 2, HitEffect.FIRE,
+        INFERNO("inferno", 1.00, 1.10, 1.25, 0, 4, HitEffect.FIRE,
                 new BossEvent.BossBarColor[]{BossEvent.BossBarColor.RED, BossEvent.BossBarColor.YELLOW, BossEvent.BossBarColor.PURPLE, BossEvent.BossBarColor.PINK},
                 ParticleTypes.SMALL_FLAME);
 
@@ -146,13 +146,14 @@ public class HordeBoss extends Zombie {
     }
 
     public static AttributeSupplier.Builder createAttributes() {
+        // 与文档对齐：200 血量 / 10 伤害 / 0.8 击退抗性 / 8 护甲
         return Zombie.createAttributes()
-                .add(Attributes.MAX_HEALTH, 160.0)
+                .add(Attributes.MAX_HEALTH, 200.0)
                 .add(Attributes.MOVEMENT_SPEED, 0.30)
-                .add(Attributes.ATTACK_DAMAGE, 9.0)
+                .add(Attributes.ATTACK_DAMAGE, 10.0)
                 .add(Attributes.ATTACK_SPEED, 1.0)
                 .add(Attributes.ARMOR, 8.0)
-                .add(Attributes.KNOCKBACK_RESISTANCE, 1.0)
+                .add(Attributes.KNOCKBACK_RESISTANCE, 0.8)
                 .add(Attributes.FOLLOW_RANGE, 64.0)
                 .add(Attributes.STEP_HEIGHT, 1.05);
     }

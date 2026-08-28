@@ -83,11 +83,6 @@ public final class SmartHordeConfig {
             .comment("单次粒子上限")
             .defineInRange("performance.maxParticles", 48, 1, 2048);
 
-    // ---------------- ai（清单补充） ----------------
-    public static final ModConfigSpec.IntValue DODGE_COOLDOWN_TICKS = BUILDER
-            .comment("闪避基础冷却（tick），实际值受难度倍率影响")
-            .defineInRange("ai.dodgeCooldownTicks", 90, 0, 1200);
-
     public static final ModConfigSpec SPEC = BUILDER.build();
 
     private SmartHordeConfig() {

@@ -2,9 +2,12 @@ package dev.smarthorde.entity.ai.movement;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.PathfinderMob;
 import net.minecraft.world.entity.ai.goal.Goal;
+import net.minecraft.world.level.block.DoorBlock;
+import net.minecraft.world.level.block.SoundType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 
@@ -14,6 +17,7 @@ import java.util.List;
 /**
  * 攀爬/叠罗汉翻墙：检测前方 2 格高墙 -> 贴墙跳；
  * 墙体更高不可攀爬时 -> 检测 1.5 格内同类实体 -> 骑上去叠罗汉，冷却 30 tick。
+ * 遇到关闭的木门会直接拉开（铁门保持关闭），零方块破坏。
  */
 public class ClimbOrStackGoal extends Goal {
 
@@ -41,6 +45,10 @@ public class ClimbOrStackGoal extends Goal {
     @Override
     public void start() {
         this.nextUseTick = this.mob.tickCount + COOLDOWN_TICKS;
+        // 木门优先：能开门就不撞墙（铁门音效为金属，自动排除）
+        if (tryOpenDoorAhead()) {
+            return;
+        }
         int wallHeight = wallHeightAhead();
         if (wallHeight <= 2 && !this.mob.isPassenger()) {
             wallJump();
@@ -91,6 +99,22 @@ public class ClimbOrStackGoal extends Goal {
         flat = flat.normalize().scale(forward);
         this.mob.setDeltaMovement(new Vec3(flat.x, 0.75, flat.z));
         this.mob.hasImpulse = true;
+    }
+
+    /** 拉开正前方的关闭木门；返回是否处理了门。 */
+    private boolean tryOpenDoorAhead() {
+        Direction facing = this.mob.getMotionDirection();
+        BlockPos base = this.mob.blockPosition().relative(facing);
+        for (BlockPos pos : List.of(base, base.above())) {
+            BlockState state = this.mob.level().getBlockState(pos);
+            if (state.getBlock() instanceof DoorBlock
+                    && !state.getValue(DoorBlock.OPEN)
+                    && state.getSoundType() == SoundType.WOOD) {
+                this.mob.level().setBlock(pos, state.setValue(DoorBlock.OPEN, Boolean.TRUE), 3);
+                return true;
+            }
+        }
+        return false;
     }
 
     /** 返回正前方实心墙高度（0 = 无墙，>2 = 不可直接攀爬）。 */

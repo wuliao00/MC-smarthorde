@@ -26,7 +26,9 @@ public class SmartHordeMod {
         ModSounds.register(modBus);
         ModNetworking.register(modBus);
 
-        container.registerConfig(ModConfig.Type.COMMON, SmartHordeConfig.SPEC);
+        // SERVER 配置：文件为 config/smarthorde-server.toml，
+        // NeoForge 内建监视器会在文件改动后自动热重载（无需 /reload 或重启）
+        container.registerConfig(ModConfig.Type.SERVER, SmartHordeConfig.SPEC);
 
         LOGGER.info("SmartHorde initialized (difficulty={}, injectVanilla={})",
                 SmartHordeConfig.DIFFICULTY_PRESET.getDefault(),

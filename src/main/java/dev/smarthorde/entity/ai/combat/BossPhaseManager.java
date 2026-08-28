@@ -23,6 +23,7 @@ public final class BossPhaseManager {
 
     private double[] thresholds;
     private double baseAttackSpeed = -1.0;
+    private double baseMoveSpeed = -1.0;
     private int phase;
 
     public BossPhaseManager(HordeBoss boss) {
@@ -53,7 +54,13 @@ public final class BossPhaseManager {
         this.phase++;
         AttributeInstance attackSpeed = this.boss.getAttribute(Attributes.ATTACK_SPEED);
         if (attackSpeed != null && this.baseAttackSpeed > 0) {
+            // 每阶段攻击速度 +25%
             attackSpeed.setBaseValue(this.baseAttackSpeed * (1.0 + this.phase * 0.25));
+        }
+        AttributeInstance moveSpeed = this.boss.getAttribute(Attributes.MOVEMENT_SPEED);
+        if (moveSpeed != null && this.baseMoveSpeed > 0) {
+            // 每阶段移动速度 +15%
+            moveSpeed.setBaseValue(this.baseMoveSpeed * (1.0 + this.phase * 0.15));
         }
         this.phaseListeners.forEach(listener -> listener.accept(this.phase));
     }
@@ -71,6 +78,10 @@ public final class BossPhaseManager {
         AttributeInstance attackSpeed = this.boss.getAttribute(Attributes.ATTACK_SPEED);
         if (attackSpeed != null) {
             this.baseAttackSpeed = attackSpeed.getBaseValue();
+        }
+        AttributeInstance moveSpeed = this.boss.getAttribute(Attributes.MOVEMENT_SPEED);
+        if (moveSpeed != null) {
+            this.baseMoveSpeed = moveSpeed.getBaseValue();
         }
     }
 }

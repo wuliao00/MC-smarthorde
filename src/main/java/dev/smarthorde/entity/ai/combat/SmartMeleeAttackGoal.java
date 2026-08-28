@@ -31,12 +31,18 @@ public class SmartMeleeAttackGoal extends Goal {
     /** 攻击招式定义 */
     public record Move(String name, int telegraphTicks, int strikeTicks, int recoverTicks,
                        double reach, float halfArcDeg, double damageMult, int cooldownTicks, int weight) {
+
+        public boolean isThrust() {
+            return "thrust".equals(this.name);
+        }
     }
 
     private static final List<Move> MOVES = List.of(
             new Move("light", 6, 3, 8, 2.8, 45.0F, 1.0, 40, 5),
             new Move("heavy", 14, 4, 18, 3.4, 60.0F, 1.7, 80, 2),
-            new Move("sweep", 10, 3, 12, 3.0, 110.0F, 1.2, 60, 3));
+            new Move("sweep", 10, 3, 12, 3.0, 110.0F, 1.2, 60, 3),
+            // 突刺：窄角高伤远程招，出招瞬间向前冲刺位移
+            new Move("thrust", 8, 2, 14, 4.6, 16.0F, 1.5, 90, 2));
 
     private enum Phase {IDLE, TELEGRAPH, STRIKE, RECOVER}
 
@@ -104,6 +110,9 @@ public class SmartMeleeAttackGoal extends Goal {
                 this.mob.setAttackTicks(this.currentMove.telegraphTicks() + this.phaseTicks);
                 if (!this.strikeApplied) {
                     this.strikeApplied = true;
+                    if (this.currentMove.isThrust()) {
+                        lungeForward(target);
+                    }
                     applyStrike(target);
                 }
                 advanceIfDone(this.currentMove.strikeTicks(), Phase.RECOVER);
@@ -229,6 +238,14 @@ public class SmartMeleeAttackGoal extends Goal {
                         1, 0.0, 0.0, 0.0, 0.02);
             }
         }
+    }
+
+    /** 突刺冲刺位移：朝目标方向猛扑一小段。 */
+    private void lungeForward(LivingEntity target) {
+        Vec3 towards = flatten(target.position().subtract(this.mob.position()));
+        this.mob.setDeltaMovement(new Vec3(
+                towards.x * 0.85, Math.min(0.15, this.mob.getDeltaMovement().y + 0.1), towards.z * 0.85));
+        this.mob.hasImpulse = true;
     }
 
     private void playTelegraphCue() {
