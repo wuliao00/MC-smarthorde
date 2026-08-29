@@ -2,7 +2,6 @@ package dev.smarthorde.entity.ai.combat;
 
 import dev.smarthorde.config.SmartHordeConfig;
 import dev.smarthorde.effects.EffectManager;
-import dev.smarthorde.entity.HordeBoss;
 import dev.smarthorde.entity.SmartZombie;
 import dev.smarthorde.init.ModSounds;
 import net.minecraft.core.particles.ParticleTypes;
@@ -11,9 +10,8 @@ import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.attributes.Attributes;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.ai.goal.Goal;
-import net.minecraft.world.entity.animal.Animal;
-import net.minecraft.world.entity.npc.Villager;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.EnumSet;
@@ -230,18 +228,14 @@ public class SmartMeleeAttackGoal extends Goal {
         double cosLimit = Math.cos(Math.toRadians(this.currentMove.halfArcDeg()));
         float damage = (float) (this.mob.getAttributeValue(Attributes.ATTACK_DAMAGE) * this.currentMove.damageMult());
 
-        List<LivingEntity> victims = serverLevel.getEntitiesOfClass(LivingEntity.class,
+        // 只命中玩家：僵尸的交战对象是玩家，误伤其他生物（含原版僵尸/蜘蛛/骷髅）
+        // 会触发 HurtByTargetGoal 反击，造成怪物混战
+        List<Player> victims = serverLevel.getEntitiesOfClass(Player.class,
                 this.mob.getBoundingBox().inflate(reach),
-                v -> v != this.mob && v.isAlive()
-                        // 排除己方（SmartZombie/HordeBoss 均为 mod 实体），避免尸潮中 Boss 被误伤
-                        && !(v instanceof SmartZombie)
-                        && !(v instanceof HordeBoss)
-                        // 排除村民与动物类，避免无差别命中被动实体
-                        && !(v instanceof Villager)
-                        && !(v instanceof Animal)
-                        && !v.isAlliedTo(this.mob));
+                p -> p.isAlive() && !p.isSpectator() && !p.isCreative()
+                        && !p.isAlliedTo(this.mob));
 
-        for (LivingEntity victim : victims) {
+        for (Player victim : victims) {
             Vec3 toVictim = flatten(victim.position().subtract(this.mob.position()));
             double distSqr = toVictim.lengthSqr();
             // 竖直方向差值单独放宽：命中叠罗汉/高台上的玩家
