@@ -18,19 +18,23 @@ import java.util.EnumSet;
 import java.util.List;
 
 /**
- * 三源闪避：
+ * 四源闪避：
  * 1. 受击后 5 tick 内 -> 向后 + 侧向冲刺；
  * 2. 检测 48 格内持弓瞄准本实体的玩家 -> 横向侧跳；
- * 3. 检测 8 格内朝自己飞来的箭矢 -> 垂直于箭矢方向冲刺。
- * 冷却从配置读取（默认 90 tick = 4.5 秒，受难度影响）。
+ * 3. 检测 12 格内准心直指本实体的玩家（无需拉弓，近距离贴脸瞄准也会触发）-> 横向侧跳；
+ * 4. 检测 8 格内朝自己飞来的箭矢 -> 垂直于箭矢方向冲刺。
+ * 冷却由难度预设决定（Normal 1.5 秒）。
  * 面向任意 PathfinderMob：SmartZombie 直接使用，
  * 原版僵尸经 VanillaMobEnhancer 注入同款行为。
  */
 public class DodgeGoal extends Goal {
 
     private static final double BOW_THREAT_RANGE = 48.0;
+    private static final double STARE_THREAT_RANGE = 12.0;
     private static final double ARROW_THREAT_RANGE = 8.0;
     private static final double DASH_STRENGTH = 0.55;
+    /** 视线夹角阈值（度）：玩家准心与"玩家->本实体"方向的最大偏角 */
+    private static final double STARE_ANGLE_DEG = 6.0;
 
     private final PathfinderMob mob;
     private int nextDodgeTick;
@@ -46,8 +50,8 @@ public class DodgeGoal extends Goal {
             return false;
         }
         // 受击闪避（源 1）无 AABB 扫描成本，保持即时响应；
-        // 弓手/箭矢威胁为 48/8 格 AABB 扫描，随机节流：约每 10 tick 执行一次实际扫描
-        if (this.mob.hurtTime <= 5 && this.mob.getRandom().nextInt(10) != 0) {
+        // 弓手/准星/箭矢威胁为 AABB 扫描，随机节流：约每 5 tick 执行一次实际扫描
+        if (this.mob.hurtTime <= 5 && this.mob.getRandom().nextInt(5) != 0) {
             return false;
         }
         return findDodgeVector() != null;
@@ -97,7 +101,15 @@ public class DodgeGoal extends Goal {
             return left ? new Vec3(-away.z, 0, away.x) : new Vec3(away.z, 0, -away.x);
         }
 
-        // 源 3：8 格内朝自己飞来的箭矢
+        // 源 3：近距离玩家准心直指本实体（近战贴脸瞄准同样触发）
+        Vec3 stareThreat = findAimingPlayer();
+        if (stareThreat != null) {
+            Vec3 away = flatten(this.mob.position().subtract(new Vec3(stareThreat.x, this.mob.getY(), stareThreat.z)));
+            boolean left = this.mob.getRandom().nextBoolean();
+            return left ? new Vec3(-away.z, 0, away.x) : new Vec3(away.z, 0, -away.x);
+        }
+
+        // 源 4：8 格内朝自己飞来的箭矢
         Vec3 arrowMotion = findIncomingArrowMotion();
         if (arrowMotion != null) {
             Vec3 perpendicular = new Vec3(-arrowMotion.z, 0, arrowMotion.x).normalize();
@@ -117,6 +129,30 @@ public class DodgeGoal extends Goal {
             return null;
         }
         return players.get(0).position();
+    }
+
+    /**
+     * 返回准心直指本实体的玩家位置（12 格内，视线夹角 < 6 度），无则 null。
+     * 与拉弓检测不同：不需要使用任何物品，近战贴脸瞄准同样触发侧跳。
+     */
+    private Vec3 findAimingPlayer() {
+        List<Player> players = this.mob.level().getEntitiesOfClass(Player.class,
+                this.mob.getBoundingBox().inflate(STARE_THREAT_RANGE),
+                p -> p.isAlive() && !p.isSpectator() && !p.isCreative());
+        double cosLimit = Math.cos(Math.toRadians(STARE_ANGLE_DEG));
+        for (Player player : players) {
+            Vec3 eye = player.getEyePosition();
+            Vec3 myCenter = this.mob.position().add(0, this.mob.getBbHeight() * 0.5, 0);
+            Vec3 toMe = myCenter.subtract(eye);
+            if (toMe.lengthSqr() < 1.0E-4) {
+                continue;
+            }
+            Vec3 look = player.getLookAngle();
+            if (look.normalize().dot(toMe.normalize()) >= cosLimit) {
+                return player.position();
+            }
+        }
+        return null;
     }
 
     /** 返回朝本实体飞来的箭矢运动方向，无则 null。 */

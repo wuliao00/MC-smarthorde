@@ -38,11 +38,14 @@ public class SmartMeleeAttackGoal extends Goal {
     }
 
     private static final List<Move> MOVES = List.of(
-            new Move("light", 6, 3, 8, 2.8, 45.0F, 1.0, 40, 5),
-            new Move("heavy", 14, 4, 18, 3.4, 60.0F, 1.7, 80, 2),
-            new Move("sweep", 10, 3, 12, 3.0, 110.0F, 1.2, 60, 3),
+            new Move("light", 6, 3, 8, 3.3, 45.0F, 1.0, 40, 5),
+            new Move("heavy", 14, 4, 18, 3.9, 60.0F, 1.7, 80, 2),
+            new Move("sweep", 10, 3, 12, 3.7, 110.0F, 1.2, 60, 3),
             // 突刺：窄角高伤远程招，出招瞬间向前冲刺位移
-            new Move("thrust", 8, 2, 14, 4.6, 16.0F, 1.5, 90, 2));
+            new Move("thrust", 8, 2, 14, 5.2, 16.0F, 1.5, 90, 2));
+
+    /** 起手距离（格）——进入该范围后开始选招出招 */
+    private static final double ENGAGE_DISTANCE = 3.5;
 
     private enum Phase {IDLE, TELEGRAPH, STRIKE, RECOVER}
 
@@ -81,7 +84,22 @@ public class SmartMeleeAttackGoal extends Goal {
         this.currentMove = null;
         this.mob.setAttackId(0);
         this.mob.setAttackTicks(0);
+        this.setFlags(EnumSet.of(Goal.Flag.MOVE, Goal.Flag.LOOK));
         super.stop();
+    }
+
+    /**
+     * 动态标志：出招各阶段与"被卡住"时只保留 LOOK，
+     * 把 MOVE 让给闪避/攀墙/包抄/距离管理等战术 Goal（否则低优先级 Goal 被饿死）。
+     */
+    private void updateFlags(boolean wantsMove) {
+        boolean hasMove = this.getFlags().contains(Goal.Flag.MOVE);
+        if (hasMove == wantsMove) {
+            return;
+        }
+        this.setFlags(wantsMove
+                ? EnumSet.of(Goal.Flag.MOVE, Goal.Flag.LOOK)
+                : EnumSet.of(Goal.Flag.LOOK));
     }
 
     @Override
@@ -91,10 +109,18 @@ public class SmartMeleeAttackGoal extends Goal {
             return;
         }
         this.mob.getLookControl().setLookAt(target, 30.0F, 30.0F);
+        // 骑乘状态下 LookControl 不生效，手动转向目标，保证渲染与命中朝向一致
+        if (this.mob.isPassenger() && this.mob.level() instanceof ServerLevel) {
+            Vec3 toTarget = flatten(target.position().subtract(this.mob.position()));
+            float wanted = (float) (Math.atan2(toTarget.z, toTarget.x) * (180.0 / Math.PI)) - 90.0F;
+            this.mob.setYRot(wanted);
+            this.mob.setYHeadRot(wanted);
+        }
 
         switch (this.phase) {
             case IDLE -> approach(target);
             case TELEGRAPH -> {
+                updateFlags(false);
                 this.mob.getNavigation().stop();
                 this.mob.setAttackTicks(this.phaseTicks);
                 if (this.phaseTicks == 0) {
@@ -107,6 +133,7 @@ public class SmartMeleeAttackGoal extends Goal {
                 advanceIfDone(this.currentMove.telegraphTicks(), Phase.STRIKE);
             }
             case STRIKE -> {
+                updateFlags(false);
                 this.mob.setAttackTicks(this.currentMove.telegraphTicks() + this.phaseTicks);
                 if (!this.strikeApplied) {
                     this.strikeApplied = true;
@@ -118,6 +145,7 @@ public class SmartMeleeAttackGoal extends Goal {
                 advanceIfDone(this.currentMove.strikeTicks(), Phase.RECOVER);
             }
             case RECOVER -> {
+                updateFlags(false);
                 this.mob.getNavigation().stop();
                 advanceIfDone(this.currentMove.recoverTicks(), Phase.IDLE);
                 if (this.phase == Phase.IDLE) {
@@ -131,11 +159,16 @@ public class SmartMeleeAttackGoal extends Goal {
     }
 
     private void approach(LivingEntity target) {
-        double reachSqr = 9.0; // 进入 3 格内开始出招
+        double reachSqr = ENGAGE_DISTANCE * ENGAGE_DISTANCE;
         if (this.mob.distanceToSqr(target) > reachSqr) {
+            // 被墙/障碍卡住时释放 MOVE，让攀墙、包抄等战术 Goal 接管走位
+            boolean stuck = this.mob.horizontalCollision
+                    || !this.mob.getNavigation().isInProgress();
+            updateFlags(!stuck);
             this.mob.getNavigation().moveTo(target, this.speedModifier);
             return;
         }
+        updateFlags(false);
         Move move = pickMove(target);
         if (move == null) {
             this.mob.getNavigation().moveTo(target, this.speedModifier);
@@ -189,7 +222,10 @@ public class SmartMeleeAttackGoal extends Goal {
         if (!(this.mob.level() instanceof ServerLevel serverLevel)) {
             return;
         }
-        Vec3 look = flatten(this.mob.getLookAngle());
+        // 骑乘时朝向跟随坐骑不可靠，直接以目标方向为瞄准轴；贴脸(<=2格)时跳过扇形判定
+        Vec3 aim = this.mob.isPassenger()
+                ? flatten(target.position().subtract(this.mob.position()))
+                : flatten(this.mob.getLookAngle());
         double reach = this.currentMove.reach();
         double cosLimit = Math.cos(Math.toRadians(this.currentMove.halfArcDeg()));
         float damage = (float) (this.mob.getAttributeValue(Attributes.ATTACK_DAMAGE) * this.currentMove.damageMult());
@@ -207,11 +243,15 @@ public class SmartMeleeAttackGoal extends Goal {
 
         for (LivingEntity victim : victims) {
             Vec3 toVictim = flatten(victim.position().subtract(this.mob.position()));
-            if (toVictim.lengthSqr() > reach * reach) {
+            double distSqr = toVictim.lengthSqr();
+            // 竖直方向差值单独放宽：命中叠罗汉/高台上的玩家
+            double dy = Math.abs(victim.getY() - this.mob.getY());
+            if (dy > 3.0 || distSqr > reach * reach) {
                 continue;
             }
             Vec3 normalized = toVictim.normalize();
-            if (look.dot(normalized) < cosLimit) {
+            boolean pointBlank = distSqr <= 4.0;
+            if (!pointBlank && !this.mob.isPassenger() && aim.dot(normalized) < cosLimit) {
                 continue;
             }
             victim.hurt(this.mob.damageSources().mobAttack(this.mob), damage);
