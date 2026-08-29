@@ -11,71 +11,109 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.EnumSet;
-import java.util.List;
 
 import javax.annotation.Nullable;
 
 /**
- * 攀爬/叠罗汉翻墙：检测前方 2 格高墙 -> 贴墙跳；
- * 墙体更高不可攀爬时 -> 检测 1.5 格内同类实体 -> 骑上去叠罗汉，冷却 30 tick。
+ * 攀墙系统（蜘蛛式攀爬）：目标在上方且面前有实体墙时，僵尸贴墙垂直攀爬，
+ * 任意单只僵尸可独立翻越高墙（上限 6 格，防止基地防守被无限破）。爬墙期间
+ * 原版僵尸自带攀爬动画（horizontalCollision 触发 climbing 姿态）。
  * 遇到关闭的木门会直接拉开（铁门保持关闭），零方块破坏。
- * 骑乘状态且目标在自己上方时 -> 主动脱离坐骑向目标跃出（翻上高台）。
  */
 public class ClimbOrStackGoal extends Goal {
 
-    private static final int COOLDOWN_TICKS = 30;
-    private static final double STACK_SEARCH_RANGE = 1.5;
+    private static final org.slf4j.Logger LOGGER = com.mojang.logging.LogUtils.getLogger();
+    private static final int COOLDOWN_TICKS = 40;
+    private static final int MAX_CLIMB_TICKS = 160;
+    private static final double MAX_CLIMB_HEIGHT = 6.0;
+    private static final double CLIMB_SPEED = 0.28;
+    private static final double WALL_PUSH = 0.18;
 
     private final PathfinderMob mob;
     private int nextUseTick;
+    private int climbTicks;
+    private double climbStartY;
+    private boolean climbing;
 
     public ClimbOrStackGoal(PathfinderMob mob) {
         this.mob = mob;
         this.setFlags(EnumSet.of(Goal.Flag.MOVE, Goal.Flag.JUMP));
     }
 
+    /** 目标在上方、自身在地面、面前有实体墙 => 开始攀爬。 */
     @Override
     public boolean canUse() {
-        if (this.mob.tickCount < this.nextUseTick) {
+        if (this.mob.tickCount < this.nextUseTick || this.climbing) {
             return false;
         }
         LivingEntity target = this.mob.getTarget();
         if (target == null || !target.isAlive()) {
             return false;
         }
-        // 骑乘状态：目标在自己上方 => 脱离并跃向高台
-        if (this.mob.isPassenger()) {
-            return target.getY() > this.mob.getY() + 0.5;
+        if (target.getY() <= this.mob.getY() + 1.2) {
+            return false; // 目标不在上方，交给其他战术目标
         }
         if (!this.mob.onGround()) {
             return false;
         }
-        // 被墙挡住，或正前方有拉不开的通道（关闭的木门）
-        return wallHeightAhead(facing(target)) > 0 || closedDoorAhead(facing(target));
+        return wallHeightAhead(facing(target)) >= 1;
     }
 
     @Override
     public void start() {
-        this.nextUseTick = this.mob.tickCount + COOLDOWN_TICKS;
+        this.climbing = true;
+        this.climbTicks = 0;
+        this.climbStartY = this.mob.getY();
+        LOGGER.info("[ClimbStack] {} starts wall-climbing", this.mob.getName().getString());
+    }
+
+    /** 攀爬进行中：每 tick 贴墙向上。 */
+    @Override
+    public boolean canContinueToUse() {
+        if (!this.climbing) {
+            return false;
+        }
         LivingEntity target = this.mob.getTarget();
+        if (target == null || !target.isAlive()) {
+            return false;
+        }
+        // 已翻上顶部：目标不再显著高于自身 => 完成
+        if (this.mob.onGround() && target.getY() <= this.mob.getY() + 1.2) {
+            return false;
+        }
+        return this.climbTicks < MAX_CLIMB_TICKS
+                && this.mob.getY() - this.climbStartY < MAX_CLIMB_HEIGHT;
+    }
+
+    @Override
+    public void tick() {
+        LivingEntity target = this.mob.getTarget();
+        if (target == null) {
+            return;
+        }
+        this.climbTicks++;
         Direction facing = facing(target);
 
-        if (this.mob.isPassenger()) {
-            // 已在叠罗汉上层：脱离坐骑向目标跃出
-            this.mob.stopRiding();
-            leapTowardsTarget(1.2);
-            return;
+        // 朝向目标并压向墙面
+        float wanted = (float) (Math.atan2(
+                target.getZ() - this.mob.getZ(), target.getX() - this.mob.getX()) * (180.0 / Math.PI)) - 90.0F;
+        this.mob.setYRot(wanted);
+        this.mob.setYHeadRot(wanted);
+
+        Vec3 push = new Vec3(facing.getStepX() * WALL_PUSH, CLIMB_SPEED, facing.getStepZ() * WALL_PUSH);
+        this.mob.setDeltaMovement(push);
+        this.mob.hasImpulse = true;
+    }
+
+    @Override
+    public void stop() {
+        if (this.climbing) {
+            LOGGER.info("[ClimbStack] {} climb ended at dy={} (ticks={})",
+                    this.mob.getName().getString(),
+                    String.format("%.1f", this.mob.getY() - this.climbStartY), this.climbTicks);
         }
-        // 木门优先：能开门就不撞墙（铁门音效为金属，自动排除）
-        if (tryOpenDoorAhead(facing)) {
-            return;
-        }
-        int wallHeight = wallHeightAhead(facing);
-        if (wallHeight > 0 && wallHeight <= 2) {
-            wallJump(facing);
-        } else {
-            tryStack();
-        }
+        this.climbing = false;
+        this.nextUseTick = this.mob.tickCount + COOLDOWN_TICKS;
     }
 
     /** 朝向取目标方向（战斗中几乎总是面朝目标）；无目标时退回运动方向。 */
@@ -93,49 +131,6 @@ public class ClimbOrStackGoal extends Goal {
         return Direction.getNearest(flat.x, 0, flat.z);
     }
 
-    /** 2 格高墙：贴墙跳。 */
-    private void wallJump(Direction facing) {
-        this.mob.setDeltaMovement(new Vec3(facing.getStepX() * 0.35, 0.85, facing.getStepZ() * 0.35));
-        this.mob.hasImpulse = true;
-    }
-
-    /** 更高的墙：骑上 1.5 格内同类实体叠罗汉抬升高度（允许骑乘者再被骑，形成 3 层链翻越 4 格塔）。 */
-    private void tryStack() {
-        // 过滤候选者：排除自身/死亡实体、已有 ≥2 个乘客者（每层限 2，防无限分叉）、
-        // 本实体的乘客（防 A 骑 B 同时 B 骑 A 的循环骑乘）、以及把本实体当乘客的实体
-        List<? extends PathfinderMob> candidates = this.mob.level().getEntitiesOfClass(this.mob.getClass(),
-                this.mob.getBoundingBox().inflate(STACK_SEARCH_RANGE),
-                e -> e != this.mob && e.isAlive() && e.getPassengers().size() < 2
-                        && !e.hasPassenger(this.mob) && !this.mob.hasPassenger(e));
-        if (candidates.isEmpty()) {
-            return;
-        }
-        PathfinderMob mount = candidates.get(0);
-        if (mount.getPassengers().size() < 2) {
-            this.mob.startRiding(mount, true);
-        }
-    }
-
-    private void leapTowardsTarget(double forward) {
-        LivingEntity target = this.mob.getTarget();
-        if (target == null) {
-            return;
-        }
-        Vec3 towards = target.position().subtract(this.mob.position());
-        Vec3 flat = new Vec3(towards.x, 0, towards.z);
-        if (flat.lengthSqr() < 1.0E-4) {
-            return;
-        }
-        flat = flat.normalize().scale(forward);
-        this.mob.setDeltaMovement(new Vec3(flat.x, 0.85, flat.z));
-        this.mob.hasImpulse = true;
-    }
-
-    /** 正前方是否存在关闭的木门。 */
-    private boolean closedDoorAhead(Direction facing) {
-        return findClosedDoor(facing) != null;
-    }
-
     /** 拉开正前方的关闭木门；返回是否处理了门。 */
     private boolean tryOpenDoorAhead(Direction facing) {
         BlockPos pos = findClosedDoor(facing);
@@ -150,7 +145,7 @@ public class ClimbOrStackGoal extends Goal {
     @Nullable
     private BlockPos findClosedDoor(Direction facing) {
         BlockPos base = this.mob.blockPosition().relative(facing);
-        for (BlockPos pos : List.of(base, base.above())) {
+        for (BlockPos pos : java.util.List.of(base, base.above())) {
             BlockState state = this.mob.level().getBlockState(pos);
             if (state.getBlock() instanceof DoorBlock
                     && !state.getValue(DoorBlock.OPEN)
@@ -161,7 +156,7 @@ public class ClimbOrStackGoal extends Goal {
         return null;
     }
 
-    /** 返回指定方向上的实心墙高度（0 = 无墙，>2 = 不可直接攀爬）。 */
+    /** 返回指定方向上的实心墙高度（0 = 无墙）。 */
     private int wallHeightAhead(Direction facing) {
         BlockPos wallBase = this.mob.blockPosition().relative(facing);
         int height = 0;
