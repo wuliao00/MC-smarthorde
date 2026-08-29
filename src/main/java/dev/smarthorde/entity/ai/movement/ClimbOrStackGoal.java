@@ -94,6 +94,9 @@ public class ClimbOrStackGoal extends Goal {
         this.climbTicks++;
         Direction facing = facing(target);
 
+        // 关键：停掉寻路导航，否则 MoveControl 每 tick 覆盖 deltaMovement，攀爬推力无效
+        this.mob.getNavigation().stop();
+
         // 朝向目标并压向墙面
         float wanted = (float) (Math.atan2(
                 target.getZ() - this.mob.getZ(), target.getX() - this.mob.getX()) * (180.0 / Math.PI)) - 90.0F;
