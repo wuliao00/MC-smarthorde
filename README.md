@@ -103,6 +103,13 @@ SmartHorde 是一个面向 Minecraft 1.21.1（NeoForge）的怪物 AI 增强模�
 4. **移除 Sodium**——Sodium 与部分实体渲染存在兼容性问题
 5. **先用命令验证**——执行 `/smarthorde summon 5`，按 F3+B 查看碰撞箱，排除生成规则问题
 
+### 启动时卡在早期窗口并报 "Timed out trying to setup the Game Window"？
+
+这是 NeoForge 早期显示窗口在老旧显卡驱动上创建 OpenGL 上下文超时（Intel HD 2000/2500 等仅支持 GL 4.0 的核显尤其常见），与本模组无关。两步解决：
+
+1. 移除 Sodium 系模组（它们挂载在启动引导阶段且对老 GL 硬件不友好）；
+2. 编辑实例目录下 `config/fml.toml`，把 `earlyWindowControl = true` 改为 `false`，跳过早期显示窗口，由游戏本体正常创建窗口。
+
 ## 设计原则
 
 - **零方块操作**：全程不破坏/不放置任何方块，不污染世界
