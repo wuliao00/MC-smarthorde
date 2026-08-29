@@ -99,13 +99,14 @@ public class ClimbOrStackGoal extends Goal {
         this.mob.hasImpulse = true;
     }
 
-    /** 更高的墙：骑上 1.5 格内同类实体叠罗汉抬升高度。 */
+    /** 更高的墙：骑上 1.5 格内同类实体叠罗汉抬升高度（允许骑乘者再被骑，形成 3 层链翻越 4 格塔）。 */
     private void tryStack() {
-        // 过滤候选者：排除自身/死亡实体、已在他人身上者（不能当坐骑）、
-        // 以及已有 ≥2 个乘客者（限制两层，防止无限叠高）
+        // 过滤候选者：排除自身/死亡实体、已有 ≥2 个乘客者（每层限 2，防无限分叉）、
+        // 本实体的乘客（防 A 骑 B 同时 B 骑 A 的循环骑乘）、以及把本实体当乘客的实体
         List<? extends PathfinderMob> candidates = this.mob.level().getEntitiesOfClass(this.mob.getClass(),
                 this.mob.getBoundingBox().inflate(STACK_SEARCH_RANGE),
-                e -> e != this.mob && e.isAlive() && !e.isPassenger() && e.getPassengers().size() < 2);
+                e -> e != this.mob && e.isAlive() && e.getPassengers().size() < 2
+                        && !e.hasPassenger(this.mob) && !this.mob.hasPassenger(e));
         if (candidates.isEmpty()) {
             return;
         }
@@ -126,7 +127,7 @@ public class ClimbOrStackGoal extends Goal {
             return;
         }
         flat = flat.normalize().scale(forward);
-        this.mob.setDeltaMovement(new Vec3(flat.x, 0.75, flat.z));
+        this.mob.setDeltaMovement(new Vec3(flat.x, 0.85, flat.z));
         this.mob.hasImpulse = true;
     }
 

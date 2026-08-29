@@ -2,6 +2,7 @@ package dev.smarthorde.inject;
 
 import dev.smarthorde.SmartHordeMod;
 import dev.smarthorde.config.SmartHordeConfig;
+import dev.smarthorde.entity.ai.combat.SmartMeleeAttackGoal;
 import dev.smarthorde.entity.ai.combat.SmartTargetGoal;
 import dev.smarthorde.entity.ai.defense.DodgeGoal;
 import dev.smarthorde.entity.ai.movement.ClimbOrStackGoal;
@@ -11,6 +12,7 @@ import dev.smarthorde.entity.ai.movement.SeparationGoal;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.ai.attributes.AttributeInstance;
 import net.minecraft.world.entity.ai.attributes.Attributes;
+import net.minecraft.world.entity.ai.goal.MeleeAttackGoal;
 import net.minecraft.world.entity.ai.goal.WrappedGoal;
 import net.minecraft.world.entity.ai.goal.target.NearestAttackableTargetGoal;
 import net.minecraft.world.entity.monster.Zombie;
@@ -29,7 +31,9 @@ import java.util.List;
  * 排除 SmartZombie/HordeBoss；NBT tag "smarthorde_injected" 防重复；
  * 注入内容：
  * - 属性：血量 x1.5、速度 x1.15；
- * - 智能 AI：SmartTargetGoal（优先弱者）、三源闪避、绕侧包抄、分离防挤团、
+ * - 攻击：原版 MeleeAttackGoal 整体替换为招式化 SmartMeleeAttackGoal
+ *   （带动态 MOVE 释放——否则它会一直占住 MOVE，饿死攀墙/包抄等战术目标）；
+ * - 智能 AI：SmartTargetGoal（优先弱者）、四源闪避、绕侧包抄、分离防挤团、
  *   距离管理、攀爬/叠罗汉；
  * - 仅替换玩家的 NearestAttackableTargetGoal（优先级<=2），村民等目标保留原版行为。
  */
@@ -99,6 +103,20 @@ public final class VanillaMobEnhancer {
     }
 
     private static void upgradeBrain(Zombie zombie) {
+        // 0. 用招式化攻击整体替换原版 MeleeAttackGoal：原版实现长期持有 MOVE 标志，
+        //    会饿死下面注入的所有战术移动 Goal；SmartMeleeAttackGoal 出招/卡住时释放 MOVE
+        List<WrappedGoal> vanillaMelee = new ArrayList<>();
+        for (WrappedGoal goal : zombie.goalSelector.getAvailableGoals()) {
+            if (goal.getGoal() instanceof MeleeAttackGoal
+                    && !(goal.getGoal() instanceof SmartMeleeAttackGoal)) {
+                vanillaMelee.add(goal);
+            }
+        }
+        for (WrappedGoal goal : vanillaMelee) {
+            zombie.goalSelector.removeGoal(goal.getGoal());
+            zombie.goalSelector.addGoal(goal.getPriority(), new SmartMeleeAttackGoal(zombie, 1.0D, false));
+        }
+
         // 1. 用 SmartTargetGoal 替换原版的玩家目标选择器（村民/其他敌对目标不受影响）
         List<WrappedGoal> playerTargeters = new ArrayList<>();
         for (WrappedGoal goal : zombie.targetSelector.getAvailableGoals()) {

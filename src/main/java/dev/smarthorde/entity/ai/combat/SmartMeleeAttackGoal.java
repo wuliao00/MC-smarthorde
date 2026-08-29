@@ -49,7 +49,7 @@ public class SmartMeleeAttackGoal extends Goal {
 
     private enum Phase {IDLE, TELEGRAPH, STRIKE, RECOVER}
 
-    private final SmartZombie mob;
+    private final net.minecraft.world.entity.PathfinderMob mob;
     private final double speedModifier;
 
     private Phase phase = Phase.IDLE;
@@ -58,7 +58,7 @@ public class SmartMeleeAttackGoal extends Goal {
     private boolean strikeApplied;
     private final int[] moveReadyAtTick = new int[MOVES.size()];
 
-    public SmartMeleeAttackGoal(SmartZombie mob, double speedModifier, boolean longMemory) {
+    public SmartMeleeAttackGoal(net.minecraft.world.entity.PathfinderMob mob, double speedModifier, boolean longMemory) {
         this.mob = mob;
         this.speedModifier = speedModifier;
         this.setFlags(EnumSet.of(Goal.Flag.MOVE, Goal.Flag.LOOK));
@@ -82,8 +82,8 @@ public class SmartMeleeAttackGoal extends Goal {
     public void stop() {
         this.phase = Phase.IDLE;
         this.currentMove = null;
-        this.mob.setAttackId(0);
-        this.mob.setAttackTicks(0);
+        syncAttackId(0);
+        syncAttackTicks(0);
         this.setFlags(EnumSet.of(Goal.Flag.MOVE, Goal.Flag.LOOK));
         super.stop();
     }
@@ -122,7 +122,7 @@ public class SmartMeleeAttackGoal extends Goal {
             case TELEGRAPH -> {
                 updateFlags(false);
                 this.mob.getNavigation().stop();
-                this.mob.setAttackTicks(this.phaseTicks);
+                syncAttackTicks(this.phaseTicks);
                 if (this.phaseTicks == 0) {
                     playTelegraphCue();
                 }
@@ -134,7 +134,7 @@ public class SmartMeleeAttackGoal extends Goal {
             }
             case STRIKE -> {
                 updateFlags(false);
-                this.mob.setAttackTicks(this.currentMove.telegraphTicks() + this.phaseTicks);
+                syncAttackTicks(this.currentMove.telegraphTicks() + this.phaseTicks);
                 if (!this.strikeApplied) {
                     this.strikeApplied = true;
                     if (this.currentMove.isThrust()) {
@@ -151,8 +151,8 @@ public class SmartMeleeAttackGoal extends Goal {
                 if (this.phase == Phase.IDLE) {
                     this.moveReadyAtTick[MOVES.indexOf(this.currentMove)] =
                             this.mob.tickCount + this.currentMove.cooldownTicks();
-                    this.mob.setAttackId(0);
-                    this.mob.setAttackTicks(0);
+                    syncAttackId(0);
+                    syncAttackTicks(0);
                 }
             }
         }
@@ -179,7 +179,7 @@ public class SmartMeleeAttackGoal extends Goal {
         this.phaseTicks = -1;
         this.strikeApplied = false;
         this.phase = Phase.TELEGRAPH;
-        this.mob.setAttackId(MOVES.indexOf(move) + 1);
+        syncAttackId(MOVES.indexOf(move) + 1);
     }
 
     private void advanceIfDone(int duration, Phase next) {
@@ -303,5 +303,18 @@ public class SmartMeleeAttackGoal extends Goal {
     /** 1.21.x Mob 没有 getFollowRange()，从 FOLLOW_RANGE 属性读取。 */
     private double followRange() {
         return this.mob.getAttributeValue(Attributes.FOLLOW_RANGE);
+    }
+
+    /** 攻击招式同步数据仅 SmartZombie 拥有；注入的原版僵尸跳过（不影响命中逻辑）。 */
+    private void syncAttackId(int id) {
+        if (this.mob instanceof SmartZombie zombie) {
+            zombie.setAttackId(id);
+        }
+    }
+
+    private void syncAttackTicks(int ticks) {
+        if (this.mob instanceof SmartZombie zombie) {
+            zombie.setAttackTicks(ticks);
+        }
     }
 }
