@@ -1,1 +1,0 @@
-﻿{"type":"minecraft:crafting_shaped","pattern":["E","E","S"],"key":{"E":{"item":"minecraft:emerald"},"S":{"item":"minecraft:stick"}},"result":{"id":"minecraft:diamond_sword","count":1,"components":{"minecraft:custom_name":'{"text":"智潮之刃","color":"green"}'}}}

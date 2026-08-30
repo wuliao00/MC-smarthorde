@@ -17,10 +17,6 @@ public final class SmartHordeConfig {
             B.comment("模组总开关").define("general.enabled", true);
     public static final ModConfigSpec.ConfigValue<String> DIFFICULTY_PRESET =
             B.comment("难度预设: easy / normal / hard / nightmare（支持热重载）").define("difficulty.preset", "normal");
-    public static final ModConfigSpec.BooleanValue INTERCEPT_MOD_EXPLOSIONS =
-            B.comment("拦截本模组来源爆炸对方块的破坏（红线，建议 true）").define("general.interceptModExplosions", true);
-    public static final ModConfigSpec.BooleanValue EXPLOSIONS_DESTROY_BLOCKS =
-            B.comment("红线：爆炸是否破坏方块，必须 false").define("general.explosionsDestroyBlocks", false);
 
     // ===== combat =====
     public static final ModConfigSpec.BooleanValue COMBO_ATTACKS =
@@ -45,14 +41,10 @@ public final class SmartHordeConfig {
             B.comment("维持最佳攻击距离（太近后撤/太远逼近/被风筝绕路）").define("movement.maintainDistanceEnabled", true);
     public static final ModConfigSpec.BooleanValue OPEN_DOORS =
             B.comment("允许开门（不算破坏方块）").define("movement.openDoorsEnabled", true);
-    public static final ModConfigSpec.BooleanValue OBSTACLE_JUMP =
-            B.comment("遇台阶/沟壑跳跃绕行").define("movement.obstacleJumpEnabled", true);
     public static final ModConfigSpec.BooleanValue CLIMBING =
             B.comment("攀爬：够不到目标时爬墙/翻檐（轮4实现，绝不挖墙）").define("movement.climbingEnabled", true);
     public static final ModConfigSpec.BooleanValue STACK_UP =
             B.comment("叠罗汉：尸潮以骑乘抬升翻墙够人（轮4实现，不破坏方块）").define("movement.stackUpEnabled", true);
-    public static final ModConfigSpec.IntValue MAX_STACK_SIZE =
-            B.comment("叠罗汉最大层数").defineInRange("movement.maxStackSize", 3, 2, 6);
 
     // ===== horde（夜间自动尸潮）=====
     public static final ModConfigSpec.BooleanValue NIGHT_AUTO =
@@ -73,8 +65,6 @@ public final class SmartHordeConfig {
             B.comment("尸潮最大同屏数（性能红线）").defineInRange("horde.maxConcurrentMobs", 40, 4, 200);
     public static final ModConfigSpec.IntValue MAX_SPAWN_LIGHT =
             B.comment("生成点最大光照（0-15，越暗越易刷）").defineInRange("horde.maxSpawnLight", 7, 0, 15);
-    public static final ModConfigSpec.BooleanValue THREAT_TRIGGER =
-            B.comment("额外：玩家噪声/威胁值累积触发（与夜间叠加，默认关）").define("horde.threatTriggerEnabled", false);
     public static final ModConfigSpec.BooleanValue ANNOUNCE_WAVES =
             B.comment("波次来袭时 title/actionbar 提示").define("horde.announceWaves", true);
     public static final ModConfigSpec.IntValue COMP_MELEE =
@@ -122,10 +112,6 @@ public final class SmartHordeConfig {
     // ===== performance（节流红线）=====
     public static final ModConfigSpec.IntValue AI_TICK_INTERVAL =
             B.comment("重型AI决策间隔(tick)，1=不节流").defineInRange("performance.aiTickInterval", 4, 1, 40);
-    public static final ModConfigSpec.IntValue SCAN_RADIUS =
-            B.comment("范围检测半径(格)").defineInRange("performance.scanRadius", 24, 4, 64);
-    public static final ModConfigSpec.IntValue MAX_SCAN_TARGETS =
-            B.comment("单次扫描候选上限").defineInRange("performance.maxScanTargets", 16, 1, 64);
     public static final ModConfigSpec.BooleanValue AUDIT_ENABLED =
             B.comment("是否启用性能审计日志（每60秒输出一次）").define("performance.auditEnabled", false);
 

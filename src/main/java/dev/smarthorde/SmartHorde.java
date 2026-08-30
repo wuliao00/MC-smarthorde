@@ -7,7 +7,6 @@ import dev.smarthorde.horde.HordeWaveManager;
 import dev.smarthorde.init.ModEntities;
 import dev.smarthorde.init.ModAttributes;
 import dev.smarthorde.init.ModSounds;
-import dev.smarthorde.init.ModParticles;
 import dev.smarthorde.init.ModSpawns;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -32,16 +31,20 @@ public class SmartHorde {
         ModSpawns.register(modBus);
         ModAttributes.register(modBus);
         ModSounds.register(modBus);
-        ModParticles.register(modBus);
 
-        container.registerConfig(ModConfig.Type.COMMON, SmartHordeConfig.SPEC);
+        // SPEC 仅注册为 SERVER 配置：难度预设等需在服务端生效，避免 COMMON/SERVER 重复注册。
         container.registerConfig(ModConfig.Type.SERVER, SmartHordeConfig.SPEC);
 
         // [轮6] 配置加载/热重载监听（mod 总线）
         modBus.addListener(SmartHorde::onConfigLoad);
         modBus.addListener(SmartHorde::onConfigReload);
 
-        LOGGER.info("[SmartHorde] 骨架已加载，等待后续模块填充。");
+        // 补回与 1.0.2 等价的初始化日志，便于部署验证时用日志确认模组已加载。
+        // 构造时 SERVER 配置尚未加载：难度取内存当前值（默认 normal，配置加载后热重载覆盖）；
+        // injectVanilla 对应 enhance.enabled（VanillaMobEnhancer），实际值随配置加载生效，
+        // 此处不读取 ModConfigSpec 避免未加载异常，故用 pending-config 占位。
+        LOGGER.info("SmartHorde initialized (difficulty={}, injectVanilla=pending-config)",
+                DifficultyManager.get().getId());
     }
 
     @SubscribeEvent

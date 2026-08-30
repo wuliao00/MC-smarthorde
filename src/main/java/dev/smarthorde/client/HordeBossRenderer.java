@@ -17,12 +17,13 @@ import net.minecraft.resources.ResourceLocation;
  *     不需要 RenderState。
  *   - 用 HumanoidModel<HordeBoss> 作为模型（不能用 ZombieModel，因为 HordeBoss extends Monster 而非 Zombie）。
  *   - getTextureLocation(HordeBoss entity) 直接接收实体，不需要 createRenderState。
- *   - 用僵尸（Husk）贴图以与普通 SmartZombie 视觉区分。
+ *   - 自绘纹理：1.0.2 jar 提供的 boss 变体图中选用 inferno 作为默认 Boss 皮肤
+ *     （复制为 horde_boss.png；frost/plague 变体系统暂不实现）。
  */
 public final class HordeBossRenderer extends HumanoidMobRenderer<HordeBoss, HumanoidModel<HordeBoss>> {
 
     private static final ResourceLocation TEXTURE =
-            ResourceLocation.withDefaultNamespace("textures/entity/illager/evoker.png");
+            ResourceLocation.fromNamespaceAndPath("smarthorde", "textures/entity/horde_boss.png");
 
     public HordeBossRenderer(EntityRendererProvider.Context ctx) {
         // 阴影半径 1.0F 以体现 Boss 较大体型（实际大小仍由 EntityType.dimensions 决定）。

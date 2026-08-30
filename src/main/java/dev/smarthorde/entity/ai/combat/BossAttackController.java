@@ -6,9 +6,11 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 
@@ -129,8 +131,21 @@ public class BossAttackController {
         float arc = currentMove.arcDegrees();
 
         AABB area = mob.getBoundingBox().inflate(range);
-        List<LivingEntity> targets = sl.getEntitiesOfClass(LivingEntity.class, area,
-                e -> e != mob && e.isAlive() && !(e instanceof Mob m && m.getType() == mob.getType()));
+
+        // [F4] 友伤根治（结构性方案，参照 1.0.x 41931c5）：受害者仅限
+        // 当前攻击目标 + 范围内玩家（需 !isAlliedTo 且非观察者/创造），
+        // 完全不再波及任何 Mob——横扫风暴等 AOE 不再误伤己方触发反击闭环
+        List<LivingEntity> targets = new ArrayList<>();
+        LivingEntity currentTarget = mob.getTarget();
+        if (currentTarget != null && currentTarget.isAlive()) {
+            targets.add(currentTarget);
+        }
+        for (Player player : sl.getEntitiesOfClass(Player.class, area,
+                p -> p.isAlive() && !p.isSpectator() && !p.isCreative() && !p.isAlliedTo(mob))) {
+            if (player != currentTarget) {
+                targets.add(player);
+            }
+        }
 
         // Boss 伤害随阶段递增: ×(1.0 + phase * 0.3)
         float phaseMul = 1.0F + bossPhase * 0.3F;

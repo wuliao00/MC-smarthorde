@@ -14,10 +14,17 @@ import java.util.EnumSet;
 import java.util.List;
 
 /**
- * 闪避 Goal（轮5）。
+ * 闪避 Goal（轮5，[C4]/[C5] 调整）。
  * 触发条件：受击 / 被瞄准 / 弹射物来袭。
+ * <ul>
+ *   <li>[C4] 概率触发：canUse 内按 EVADE_CHANCE 掷骰；冷却接入 EVADE_COOLDOWN 配置</li>
+ *   <li>[C4] 事件驱动：{@link EvadeEventTrigger} 在伤害结算前置位 pendingEvade，
+ *       canUse 优先消费该标志直接触发受击闪避；hurtTime 轮询保留为兜底</li>
+ *   <li>[C5] 玩家瞄准/弹射物扫描各带独立扫描冷却（AI_TICK_INTERVAL 派生，
+ *       与闪避冷却解耦），空闲期不再每 tick 双扫描</li>
+ * </ul>
  * 闪避动作：受击→后撤+侧向、瞄准→横向侧跳、弹射物→垂直规避。
- * 冷却 30 tick 防止无限闪避。priority=2，高于所有走位/攻击。
+ * priority=3（SmartZombie 注册点），仅作用于移动。
  */
 public class EvadeGoal extends Goal {
     private final PathfinderMob mob;
@@ -25,10 +32,22 @@ public class EvadeGoal extends Goal {
     private Vec3 evadeDestination = Vec3.ZERO;
     private TriggerReason lastTrigger = TriggerReason.NONE;
 
-    private static final int COOLDOWN_TICKS = 30;
+    /** [C4] 事件驱动闪避标志（EvadeEventTrigger 置位，canUse 消费）。 */
+    private boolean pendingEvade = false;
+    /** [m5] 闪避请求置位时的 tickCount：消费时校验时效，冷却/概率未过导致的滞留不再凭空消费。 */
+    private int pendingEvadeRequestTick = Integer.MIN_VALUE;
+    /** [C5] 玩家瞄准扫描冷却（独立于闪避冷却）。 */
+    private int aimScanCooldown = 0;
+    /** [C5] 弹射物扫描冷却（独立于闪避冷却）。 */
+    private int projScanCooldown = 0;
+
     private static final double AIM_DETECT_RANGE = 12.0D;
     private static final double PROJECTILE_SCAN_RADIUS = 4.0D;
     private static final double EVADE_DISTANCE = 3.0D;
+    /** [C5] 扫描冷却 = AI_TICK_INTERVAL × 2（默认档 8 tick，落在 4-10 区间）。 */
+    private static final int SCAN_COOLDOWN_MULT = 2;
+    /** [m5] 闪避请求有效时长（tick）：超时未消费即作废。 */
+    private static final int PENDING_EVADE_TTL_TICKS = 10;
 
     private enum TriggerReason { NONE, HURT, AIMED, PROJECTILE }
 
@@ -37,28 +56,70 @@ public class EvadeGoal extends Goal {
         this.setFlags(EnumSet.of(Flag.MOVE));
     }
 
+    /** [C4] 事件驱动入口：伤害结算前由 EvadeEventTrigger 调用。 */
+    public void requestEvade() {
+        this.pendingEvade = true;
+        // [m5] 记录请求时刻，消费时校验时效
+        this.pendingEvadeRequestTick = mob.tickCount;
+    }
+
+    private static int scanIntervalTicks() {
+        return Math.max(1, SmartHordeConfig.AI_TICK_INTERVAL.get()) * SCAN_COOLDOWN_MULT;
+    }
+
     @Override
     public boolean canUse() {
         if (!SmartHordeConfig.EVADE.get()) return false;
+        // [F3] STACK 骑乘中让位：乘客无法自主位移，闪避无意义
+        if (ClimbOrStackGoal.isStackRider(mob)) return false;
         if (cooldown > 0) { cooldown--; return false; }
 
-        // 1. 受击检测：hurtTime > 0 表示刚受击（受击后递减）
+        // [C4] 概率判定：本次轮询是否允许触发闪避
+        if (mob.getRandom().nextFloat() >= SmartHordeConfig.EVADE_CHANCE.get().floatValue()) {
+            return false;
+        }
+
+        // [C4] 事件驱动：受击事件已置位，直接按受击方向闪避
+        if (pendingEvade) {
+            pendingEvade = false;
+            // [m5] 过期丢弃：请求超过 10 tick 未消费（被冷却/概率阻塞滞留）即作废，
+            //      继续走后续常规检测，避免滞后很久后凭空触发受击闪避
+            if (mob.tickCount - pendingEvadeRequestTick <= PENDING_EVADE_TTL_TICKS) {
+                lastTrigger = TriggerReason.HURT;
+                computeHurtEvade();
+                return true;
+            }
+        }
+
+        // 1. 受击检测：hurtTime > 0 表示刚受击（事件轮询兜底路径）
         if (mob.hurtTime > 0) {
             lastTrigger = TriggerReason.HURT;
             computeHurtEvade();
             return true;
         }
 
-        // 2. 瞄准检测
-        Player aimer = findAimingPlayer();
+        // 2. 瞄准检测（[C5] 独立扫描冷却）
+        Player aimer = null;
+        if (aimScanCooldown > 0) {
+            aimScanCooldown--;
+        } else {
+            aimer = findAimingPlayer();
+            aimScanCooldown = scanIntervalTicks();
+        }
         if (aimer != null) {
             lastTrigger = TriggerReason.AIMED;
             computeAimEvade(aimer);
             return true;
         }
 
-        // 3. 弹射物检测
-        Projectile incoming = findIncomingProjectile();
+        // 3. 弹射物检测（[C5] 独立扫描冷却）
+        Projectile incoming = null;
+        if (projScanCooldown > 0) {
+            projScanCooldown--;
+        } else {
+            incoming = findIncomingProjectile();
+            projScanCooldown = scanIntervalTicks();
+        }
         if (incoming != null) {
             lastTrigger = TriggerReason.PROJECTILE;
             computeProjectileEvade(incoming);
@@ -80,6 +141,8 @@ public class EvadeGoal extends Goal {
     @Override
     public boolean canContinueToUse() {
         if (!SmartHordeConfig.EVADE.get()) return false;
+        // [F3] STACK 骑乘中让位
+        if (ClimbOrStackGoal.isStackRider(mob)) return false;
         if (!mob.getNavigation().isInProgress()) return false;
         return mob.distanceToSqr(evadeDestination) > 1.0D;
     }
@@ -87,7 +150,10 @@ public class EvadeGoal extends Goal {
     @Override
     public void stop() {
         mob.getNavigation().stop();
-        cooldown = dev.smarthorde.config.DifficultyManager.get().getEvadeCooldownTicks();
+        // [C4] 冷却接入 EVADE_COOLDOWN 配置
+        cooldown = SmartHordeConfig.EVADE_COOLDOWN.get();
+        pendingEvade = false;
+        pendingEvadeRequestTick = Integer.MIN_VALUE; // [m5] 清标志时一并重置时效基准
         lastTrigger = TriggerReason.NONE;
     }
 

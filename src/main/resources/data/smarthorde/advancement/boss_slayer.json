@@ -1,1 +1,25 @@
-{"criteria":{"killed_boss":{"conditions":{"entity":{"type":"smarthorde:horde_boss"}},"trigger":"minecraft:player_killed_entity"}},"display":{"announce_to_chat":true,"description":{"translate":"advancements.smarthorde.boss_slayer.description"},"frame":"challenge","hidden":false,"icon":{"id":"minecraft:wither_skeleton_skull"},"show_toast":true,"title":{"translate":"advancements.smarthorde.boss_slayer.title"}},"requirements":[["killed_boss"]],"rewards":{"experience":100}}
+{
+  "parent": "smarthorde:first_blood",
+  "display": {
+    "icon": { "id": "minecraft:diamond_sword" },
+    "title": { "translate": "advancement.smarthorde.boss_slayer.title" },
+    "description": { "translate": "advancement.smarthorde.boss_slayer.desc" },
+    "frame": "goal",
+    "show_toast": true,
+    "announce_to_chat": true
+  },
+  "criteria": {
+    "kill_horde_boss": {
+      "trigger": "minecraft:player_killed_entity",
+      "conditions": {
+        "entity": [
+          {
+            "condition": "minecraft:entity_properties",
+            "entity": "this",
+            "predicate": { "type": "smarthorde:horde_boss" }
+          }
+        ]
+      }
+    }
+  }
+}

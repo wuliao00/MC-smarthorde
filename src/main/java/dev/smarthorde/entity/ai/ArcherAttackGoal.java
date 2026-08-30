@@ -72,7 +72,8 @@ public class ArcherAttackGoal extends Goal {
         double dy = target.getEyeY() - arrow.getY();
         double dz = target.getZ() - mob.getZ();
         double dist = Math.sqrt(dx * dx + dz * dz);
-        arrow.shoot(dx, dy + dist * 0.2, dz, 1.6F, 2.0F);
+        // [F4] 散布 2.0F -> 1.0F：减小误伤面，防箭矢偏飞命中队友
+        arrow.shoot(dx, dy + dist * 0.2, dz, 1.6F, 1.0F);
         mob.level().addFreshEntity(arrow);
         mob.playSound(net.minecraft.sounds.SoundEvents.ARROW_SHOOT, 1.0F, 1.0F / (mob.getRandom().nextFloat() * 0.4F + 0.8F));
     }

@@ -1,1 +1,26 @@
-{"criteria":{"triggered":{"conditions":{},"trigger":"minecraft:tick"}},"display":{"announce_to_chat":true,"description":{"translate":"advancements.smarthorde.first_horde.description"},"frame":"task","hidden":false,"icon":{"id":"minecraft:zombie_head"},"show_toast":true,"title":{"translate":"advancements.smarthorde.first_horde.title"}},"requirements":[["triggered"]]}
+{
+  "criteria": {
+    "kill_smart_zombie": {
+      "trigger": "minecraft:player_killed_entity",
+      "conditions": {
+        "entity": [
+          {
+            "condition": "minecraft:entity_properties",
+            "entity": "this",
+            "predicate": { "type": "smarthorde:smart_zombie" }
+          }
+        ]
+      }
+    }
+  },
+  "display": {
+    "announce_to_chat": true,
+    "description": { "translate": "advancements.smarthorde.first_horde.description" },
+    "frame": "task",
+    "hidden": false,
+    "icon": { "id": "minecraft:zombie_head" },
+    "show_toast": true,
+    "title": { "translate": "advancements.smarthorde.first_horde.title" }
+  },
+  "requirements": [["kill_smart_zombie"]]
+}

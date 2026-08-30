@@ -28,6 +28,8 @@ public class SeparationGoal extends Goal {
 
     @Override
     public boolean canUse() {
+        // [F3] STACK 骑乘中让位：乘客导航无效
+        if (ClimbOrStackGoal.isStackRider(this.mob)) return false;
         if (this.cooldown > 0) {
             this.cooldown--;
             return false;

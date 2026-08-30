@@ -30,6 +30,8 @@ public class MaintainDistanceGoal extends Goal {
     @Override
     public boolean canUse() {
         if (!SmartHordeConfig.MAINTAIN_DISTANCE.get()) return false;
+        // [F3] STACK 骑乘中让位：乘客导航无效，抢占会 stopRiding 致塔瓦解
+        if (ClimbOrStackGoal.isStackRider(mob)) return false;
         LivingEntity target = mob.getTarget();
         if (target == null || !target.isAlive()) return false;
         double dist = mob.distanceTo(target);
@@ -39,6 +41,8 @@ public class MaintainDistanceGoal extends Goal {
     @Override
     public boolean canContinueToUse() {
         if (!SmartHordeConfig.MAINTAIN_DISTANCE.get()) return false;
+        // [F3] STACK 骑乘中让位
+        if (ClimbOrStackGoal.isStackRider(mob)) return false;
         LivingEntity target = mob.getTarget();
         if (target == null || !target.isAlive()) return false;
         double dist = mob.distanceTo(target);

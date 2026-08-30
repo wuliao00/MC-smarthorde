@@ -65,7 +65,7 @@ public final class SmartHordeCommands {
                             var spawned = HordeWaveSpawner.spawnWave(
                                     player.serverLevel(), player.blockPosition(), 0, count);
                             ctx.getSource().sendSuccess(() -> Component.literal(
-                                    "已生成 " + spawned.size() + "/" + count + " 只 SmartZombie")
+                                    "已生成 " + spawned.size() + "/" + count + " 只尸潮怪物")
                                     .withStyle(ChatFormatting.AQUA), true);
                             return 1;
                         })));

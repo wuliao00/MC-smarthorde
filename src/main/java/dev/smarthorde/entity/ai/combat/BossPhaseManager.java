@@ -1,11 +1,12 @@
 package dev.smarthorde.entity.ai.combat;
 
+import dev.smarthorde.SmartHorde;
 import dev.smarthorde.config.SmartHordeConfig;
 import net.minecraft.world.BossEvent;
 import net.minecraft.world.entity.monster.Monster;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
+import java.util.Comparator;
 import java.util.List;
 
 /**
@@ -15,7 +16,8 @@ import java.util.List;
  */
 public class BossPhaseManager {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger("SmartHorde");
+    // [C7] 统一使用主类 LOGGER
+    private static final Logger LOGGER = SmartHorde.LOGGER;
 
     @FunctionalInterface
     public interface PhaseCallback {
@@ -40,16 +42,14 @@ public class BossPhaseManager {
         this.callback = callback;
 
         List<? extends Double> raw = SmartHordeConfig.BOSS_PHASE_THRESHOLDS.get();
+        // [C7] 降序排序：Comparator 一行等价替代手写反转循环
         double[] sorted = raw.stream()
                 .filter(d -> d != null && d > 0.0D && d < 1.0D)
                 .mapToDouble(Double::doubleValue)
-                .sorted()
+                .boxed()
+                .sorted(Comparator.reverseOrder())
+                .mapToDouble(Double::doubleValue)
                 .toArray();
-        for (int i = 0; i < sorted.length / 2; i++) {
-            double tmp = sorted[i];
-            sorted[i] = sorted[sorted.length - 1 - i];
-            sorted[sorted.length - 1 - i] = tmp;
-        }
         this.thresholds = sorted;
         this.totalPhases = sorted.length + 1;
     }

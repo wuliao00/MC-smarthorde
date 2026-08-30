@@ -7,7 +7,7 @@ import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import net.minecraft.client.renderer.entity.HumanoidMobRenderer;
 import net.minecraft.resources.ResourceLocation;
 
-/** HordeArcher 渲染器，用骷髅贴图。 */
+/** HordeArcher 渲染器，用骷髅贴图（暂无自绘纹理，使用原版替代）。 */
 public final class HordeArcherRenderer extends HumanoidMobRenderer<HordeArcher, HumanoidModel<HordeArcher>> {
     private static final ResourceLocation TEXTURE =
             ResourceLocation.withDefaultNamespace("textures/entity/skeleton/skeleton.png");

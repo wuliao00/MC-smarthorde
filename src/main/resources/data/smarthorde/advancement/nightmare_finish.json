@@ -1,0 +1,14 @@
+{
+  "parent": "smarthorde:horde_champion",
+  "display": {
+    "icon": { "id": "minecraft:totem_of_undying" },
+    "title": { "translate": "advancement.smarthorde.nightmare_finish.title" },
+    "description": { "translate": "advancement.smarthorde.nightmare_finish.desc" },
+    "frame": "challenge",
+    "show_toast": true,
+    "announce_to_chat": true
+  },
+  "criteria": {
+    "done": { "trigger": "minecraft:impossible" }
+  }
+}

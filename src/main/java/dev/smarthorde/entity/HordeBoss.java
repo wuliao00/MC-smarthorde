@@ -25,7 +25,12 @@ import net.minecraft.world.entity.SpawnGroupData;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.ai.goal.FloatGoal;
 import net.minecraft.world.entity.ai.goal.WaterAvoidingRandomStrollGoal;
+import net.minecraft.world.entity.ai.goal.target.HurtByTargetGoal;
+import net.minecraft.world.entity.ai.goal.target.NearestAttackableTargetGoal;
+import net.minecraft.world.entity.animal.IronGolem;
 import net.minecraft.world.entity.monster.Monster;
+import net.minecraft.world.entity.npc.AbstractVillager;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.ServerLevelAccessor;
 
@@ -52,7 +57,7 @@ public class HordeBoss extends Monster implements dev.smarthorde.entity.ai.IAtta
     public HordeBoss(EntityType<? extends HordeBoss> type, Level level) {
         super(type, level);
         this.bossEvent = new ServerBossEvent(
-                Component.literal("尸潮领主"),
+                Component.translatable("entity.smarthorde.horde_boss"),
                 BossEvent.BossBarColor.WHITE,
                 BossEvent.BossBarOverlay.PROGRESS
         );
@@ -176,8 +181,12 @@ public class HordeBoss extends Monster implements dev.smarthorde.entity.ai.IAtta
         this.goalSelector.addGoal(2, new CoordinationGoal(this));
         this.goalSelector.addGoal(3, new SeparationGoal(this));
         this.goalSelector.addGoal(8, new WaterAvoidingRandomStrollGoal(this, 0.9D));
-        this.targetSelector.addGoal(1, new net.minecraft.world.entity.ai.goal.target.NearestAttackableTargetGoal<>(this, net.minecraft.world.entity.player.Player.class, true));
-        this.targetSelector.addGoal(2, new net.minecraft.world.entity.ai.goal.target.HurtByTargetGoal(this));
+        this.targetSelector.addGoal(1, new NearestAttackableTargetGoal<>(this, Player.class, true));
+        // [F4] 反击排除全体尸潮单位，防互殴反击闭环
+        this.targetSelector.addGoal(2, new HurtByTargetGoal(this, SmartZombie.class, HordeBoss.class, HordeBrute.class, HordeArcher.class));
         this.targetSelector.addGoal(3, new SmartTargetGoal(this));
+        // [F5] 对齐尸潮语义：补村民/铁傀儡索敌（排在玩家之后）
+        this.targetSelector.addGoal(4, new NearestAttackableTargetGoal<>(this, AbstractVillager.class, false));
+        this.targetSelector.addGoal(5, new NearestAttackableTargetGoal<>(this, IronGolem.class, true));
     }
 }

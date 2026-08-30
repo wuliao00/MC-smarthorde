@@ -24,7 +24,7 @@ import net.minecraft.resources.ResourceLocation;
 public final class SmartZombieRenderer extends HumanoidMobRenderer<SmartZombie, HumanoidModel<SmartZombie>> {
 
     private static final ResourceLocation TEXTURE =
-            ResourceLocation.withDefaultNamespace("textures/entity/zombie/zombie.png");
+            ResourceLocation.fromNamespaceAndPath("smarthorde", "textures/entity/smart_zombie.png");
 
     public SmartZombieRenderer(EntityRendererProvider.Context ctx) {
         super(ctx, new HumanoidModel<>(ctx.bakeLayer(ModelLayers.ZOMBIE)), 0.5F);

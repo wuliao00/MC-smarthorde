@@ -18,7 +18,9 @@ import net.minecraft.world.entity.ai.goal.FloatGoal;
 import net.minecraft.world.entity.ai.goal.WaterAvoidingRandomStrollGoal;
 import net.minecraft.world.entity.ai.goal.target.HurtByTargetGoal;
 import net.minecraft.world.entity.ai.goal.target.NearestAttackableTargetGoal;
+import net.minecraft.world.entity.animal.IronGolem;
 import net.minecraft.world.entity.monster.Monster;
+import net.minecraft.world.entity.npc.AbstractVillager;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
 
@@ -32,7 +34,7 @@ public class HordeBrute extends Monster implements IAttackMob {
             SynchedEntityData.defineId(HordeBrute.class, EntityDataSerializers.INT);
 
     private final ServerBossEvent bossEvent = new ServerBossEvent(
-            net.minecraft.network.chat.Component.literal("尸潮蛮兽"),
+            net.minecraft.network.chat.Component.translatable("entity.smarthorde.horde_brute"),
             BossBarColor.RED, BossBarOverlay.NOTCHED_20);
 
     public HordeBrute(EntityType<? extends HordeBrute> type, Level level) { super(type, level); }
@@ -55,8 +57,12 @@ public class HordeBrute extends Monster implements IAttackMob {
         goalSelector.addGoal(2, new CoordinationGoal(this));
         goalSelector.addGoal(8, new WaterAvoidingRandomStrollGoal(this, 0.5D));
         targetSelector.addGoal(1, new NearestAttackableTargetGoal<>(this, Player.class, true));
-        targetSelector.addGoal(2, new HurtByTargetGoal(this));
+        // [F4] 反击排除全体尸潮单位，防互殴反击闭环
+        targetSelector.addGoal(2, new HurtByTargetGoal(this, SmartZombie.class, HordeBoss.class, HordeBrute.class, HordeArcher.class));
         targetSelector.addGoal(3, new SmartTargetGoal(this));
+        // [F5] 对齐尸潮语义：补村民/铁傀儡索敌（排在玩家之后）
+        targetSelector.addGoal(4, new NearestAttackableTargetGoal<>(this, AbstractVillager.class, false));
+        targetSelector.addGoal(5, new NearestAttackableTargetGoal<>(this, IronGolem.class, true));
     }
 
     @Override

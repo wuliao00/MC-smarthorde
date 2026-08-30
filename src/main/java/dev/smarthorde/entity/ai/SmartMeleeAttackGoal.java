@@ -32,6 +32,8 @@ public class SmartMeleeAttackGoal extends Goal {
 
     @Override
     public boolean canUse() {
+        // [F3] STACK 骑乘中让位：乘客导航无效，近战抢占会 stopRiding 致塔瓦解
+        if (ClimbOrStackGoal.isStackRider(this.mob)) return false;
         LivingEntity target = this.mob.getTarget();
         if (target == null || !target.isAlive()) return false;
         controller.tickCooldowns();
@@ -41,6 +43,8 @@ public class SmartMeleeAttackGoal extends Goal {
 
     @Override
     public boolean canContinueToUse() {
+        // [F3] STACK 骑乘中让位（防抢占致塔瓦解）
+        if (ClimbOrStackGoal.isStackRider(this.mob)) return false;
         LivingEntity target = this.mob.getTarget();
         if (target == null || !target.isAlive()) return false;
         return controller.isBusy() || this.mob.distanceTo(target) <= 10.0D;

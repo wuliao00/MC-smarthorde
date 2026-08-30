@@ -1,5 +1,6 @@
 package dev.smarthorde.entity.ai;
 
+import dev.smarthorde.config.SmartHordeConfig;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
@@ -16,6 +17,8 @@ import java.util.List;
  * 3+只时分工：ATTACKER 正面进攻 / FLANKER 绕后 / ARCHER 保持距离施压。
  * 5+只时 ATTACKER 轮流进攻，避免同时硬直。
  * 角色基于实体 UUID 分配，每 20 tick 重新评估。
+ * [C7] FlankGoal 已删除：绕侧/绕后统一由 FLANKER 角色承担，
+ * 开关收归 movement.flankingEnabled（关闭时 FLANKER 降级为 ATTACKER）。
  */
 public class CoordinationGoal extends Goal {
 
@@ -24,6 +27,13 @@ public class CoordinationGoal extends Goal {
     private int recheckCooldown = 0;
     private static final int RECHECK_INTERVAL = 20;
     private static final double ALLY_SCAN_RADIUS = 16.0D;
+    // [C5] 扫描结果缓存（消除每 tick 双 getEntitiesOfClass）
+    private int cachedAllyCount = -1;
+    private int allyCacheTick = -1;
+    private Boolean cachedAllyAttacking = null;
+    private int attackCacheTick = -1;
+    /** [C5] 缓存时长 = AI_TICK_INTERVAL × 5（默认档 20 tick）。 */
+    private static final int CACHE_MULT = 5;
 
     public enum GroupRole { ATTACKER, FLANKER, ARCHER }
 
@@ -33,10 +43,19 @@ public class CoordinationGoal extends Goal {
     }
 
     @Override
+    public void start() {
+        // [C5] goal 启动时失效缓存
+        cachedAllyCount = -1;
+        cachedAllyAttacking = null;
+    }
+
+    @Override
     public boolean canUse() {
         if (recheckCooldown > 0) { recheckCooldown--; return false; }
         recheckCooldown = RECHECK_INTERVAL;
 
+        // [F3] STACK 骑乘中让位：乘客导航无效，抢占会 stopRiding 致塔瓦解
+        if (ClimbOrStackGoal.isStackRider(mob)) return false;
         LivingEntity target = mob.getTarget();
         if (target == null || !target.isAlive()) return false;
 
@@ -49,6 +68,8 @@ public class CoordinationGoal extends Goal {
 
     @Override
     public boolean canContinueToUse() {
+        // [F3] STACK 骑乘中让位
+        if (ClimbOrStackGoal.isStackRider(mob)) return false;
         LivingEntity target = mob.getTarget();
         return target != null && target.isAlive();
     }
@@ -121,26 +142,46 @@ public class CoordinationGoal extends Goal {
             else if (hash < 85) role = GroupRole.FLANKER;
             else role = GroupRole.ARCHER;
         }
+        // [C7] FlankGoal 移除后，绕侧开关收归 FLANKER 角色门控
+        if (role == GroupRole.FLANKER && !SmartHordeConfig.FLANK.get()) {
+            role = GroupRole.ATTACKER;
+        }
     }
 
-    /** 检测附近的同类是否正在出招 */
+    /** 检测附近的同类是否正在出招。[C5] 结果缓存 AI_TICK_INTERVAL×5 tick */
     private boolean isAllyAttacking() {
         if (!(mob instanceof IAttackMob)) return false;
+        int interval = Math.max(1, SmartHordeConfig.AI_TICK_INTERVAL.get()) * CACHE_MULT;
+        if (cachedAllyAttacking != null && mob.tickCount - attackCacheTick < interval) {
+            return cachedAllyAttacking;
+        }
         AABB box = mob.getBoundingBox().inflate(ALLY_SCAN_RADIUS);
         List<Mob> allies = mob.level().getEntitiesOfClass(Mob.class, box,
                 e -> e != mob && e.getClass() == mob.getClass() && e.isAlive());
+        boolean result = false;
         for (Mob ally : allies) {
-            if (ally instanceof IAttackMob am && am.getAttackId() != 0) return true;
+            if (ally instanceof IAttackMob am && am.getAttackId() != 0) {
+                result = true;
+                break;
+            }
         }
-        return false;
+        cachedAllyAttacking = result;
+        attackCacheTick = mob.tickCount;
+        return result;
     }
 
-    /** 检测附近同类数量（含自己） */
+    /** 检测附近同类数量（含自己）。[C5] 结果缓存 AI_TICK_INTERVAL×5 tick */
     private int countNearbyAllies() {
+        int interval = Math.max(1, SmartHordeConfig.AI_TICK_INTERVAL.get()) * CACHE_MULT;
+        if (cachedAllyCount >= 0 && mob.tickCount - allyCacheTick < interval) {
+            return cachedAllyCount;
+        }
         AABB box = mob.getBoundingBox().inflate(ALLY_SCAN_RADIUS);
         List<Mob> allies = mob.level().getEntitiesOfClass(Mob.class, box,
                 e -> e.getClass() == mob.getClass() && e.isAlive());
-        return allies.size();
+        cachedAllyCount = allies.size();
+        allyCacheTick = mob.tickCount;
+        return cachedAllyCount;
     }
 
     public GroupRole getRole() { return role; }

@@ -41,3 +41,9 @@ repo/
 
 # ZR decompiler temp
 _zr_tmp/
+
+### Scratch / verification artifacts ###
+_*.log
+_*.txt
+_zr_verify_*.java
+BomTest.java

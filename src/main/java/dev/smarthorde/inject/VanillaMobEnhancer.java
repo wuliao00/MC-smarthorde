@@ -1,6 +1,12 @@
 package dev.smarthorde.inject;
 
 import dev.smarthorde.config.SmartHordeConfig;
+import dev.smarthorde.entity.HordeArcher;
+import dev.smarthorde.entity.HordeBoss;
+import dev.smarthorde.entity.HordeBrute;
+import dev.smarthorde.entity.SmartZombie;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.PathfinderMob;
 import net.minecraft.world.entity.ai.attributes.Attributes;
@@ -28,8 +34,9 @@ import org.slf4j.LoggerFactory;
  *   <li>NearestAttackableTargetGoal 检测范围提升到 48 格</li>
  * </ul>
  * 用 NBT tag 防重复注入。受 {@code enhance.enabled} 配置控制。
- * {@code instanceof Monster} 自动覆盖 Zombie/Husk/Drowned/Skeleton/Stray/Spider/
- * CaveSpider/Creeper/Pillager/Vindicator/Ravager/Witch 等原版怪物。
+ * [C1] {@code instanceof Monster} 先筛怪物类，再按 {@code enhance.whitelist}
+ * 注册 id 精确匹配（白名单外一律跳过）；本模组实体（smarthorde 命名空间）始终跳过，
+ * 防止 SmartZombie/HordeBoss 被二次注入。
  */
 @EventBusSubscriber
 public final class VanillaMobEnhancer {
@@ -52,24 +59,34 @@ public final class VanillaMobEnhancer {
     public static void onEntityJoin(EntityJoinLevelEvent event) {
         if (!SmartHordeConfig.ENHANCE_VANILLA.get()) return;
         if (event.getLevel().isClientSide()) return;
-        // 覆盖所有原版怪物：Zombie/Husk/Drowned/Skeleton/Stray/Spider/CaveSpider/
-        // Creeper/Pillager/Vindicator/Ravager/Witch 均继承 Monster
+        // 覆盖所有原版怪物（均继承 Monster），实际注入范围由 [C1] 白名单收窄
         if (!(event.getEntity() instanceof Monster monster)) return;
         // Monster 派生自 Mob，绝大多数原版怪物（Zombie/Skeleton/Creeper 等）实际是
         // PathfinderMob；Ravager 直接继承 Monster/Mob。NearestAttackableTargetGoal 与
         // 属性 API 以 Mob 即可使用；HurtByTargetGoal 需 PathfinderMob，故按子类型分支。
         if (!(monster instanceof Mob mob)) return;
 
+        // [C1-a] 跳过本模组实体：SmartZombie/HordeBoss/HordeArcher/HordeBrute
+        // 已有完整 AI，防止被当作“原版怪物”二次注入 48 格索敌与属性加成
+        ResourceLocation typeId = BuiltInRegistries.ENTITY_TYPE.getKey(mob.getType());
+        if ("smarthorde".equals(typeId.getNamespace())) return;
+
+        // [C1-b] 白名单精确匹配（按注册 id），未命中直接跳过
+        if (!SmartHordeConfig.ENHANCE_WHITELIST.get().contains(typeId.toString())) return;
+
         if (mob.getPersistentData().getBoolean(TAG_INJECTED)) return;
         mob.getPersistentData().putBoolean(TAG_INJECTED, true);
 
         boolean isCreeper = mob instanceof Creeper;
 
-        // 1. 提升索敌范围：替换 NearestAttackableTargetGoal 为 48 格检测版本
-        mob.targetSelector.getAvailableGoals().removeIf(
-                wrapper -> wrapper.getGoal() instanceof NearestAttackableTargetGoal);
-        mob.targetSelector.addGoal(2,
-                new NearestAttackableTargetGoal<>(mob, Player.class, true));
+        // 1. [C1] 仅当尚无 NearestAttackableTargetGoal 时才追加，
+        //    不再移除/替换原版已有索敌，避免重复扫描与行为漂移
+        boolean hasNearestTargetGoal = mob.targetSelector.getAvailableGoals().stream()
+                .anyMatch(wrapper -> wrapper.getGoal() instanceof NearestAttackableTargetGoal);
+        if (!hasNearestTargetGoal) {
+            mob.targetSelector.addGoal(2,
+                    new NearestAttackableTargetGoal<>(mob, Player.class, true));
+        }
 
         // 若有 FOLLOW_RANGE 属性，同步提升基础值
         var followAttr = mob.getAttribute(Attributes.FOLLOW_RANGE);
@@ -105,10 +122,12 @@ public final class VanillaMobEnhancer {
 
         // 5. HurtByTargetGoal：被攻击时反击攻击者。需要 PathfinderMob（Ravager 不是，
         // 故跳过其 HIT_BY 反击 AI，其余原版怪物均满足）。
+        // [F4] 追加排除全体尸潮单位，防原版怪与尸潮互殴（反击闭环源头之一）
         if (mob instanceof PathfinderMob pathfinder) {
             mob.targetSelector.getAvailableGoals().removeIf(
                     wrapper -> wrapper.getGoal() instanceof HurtByTargetGoal);
-            mob.targetSelector.addGoal(1, new HurtByTargetGoal(pathfinder));
+            mob.targetSelector.addGoal(1, new HurtByTargetGoal(pathfinder,
+                    SmartZombie.class, HordeBoss.class, HordeBrute.class, HordeArcher.class));
         }
 
         LOGGER.debug("[SmartHorde] 注入增强: 原版怪物 {} @ {}",

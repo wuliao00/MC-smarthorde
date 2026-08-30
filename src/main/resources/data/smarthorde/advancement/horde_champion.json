@@ -1,0 +1,14 @@
+{
+  "parent": "smarthorde:wave_survivor",
+  "display": {
+    "icon": { "id": "minecraft:diamond" },
+    "title": { "translate": "advancement.smarthorde.horde_champion.title" },
+    "description": { "translate": "advancement.smarthorde.horde_champion.desc" },
+    "frame": "goal",
+    "show_toast": true,
+    "announce_to_chat": true
+  },
+  "criteria": {
+    "done": { "trigger": "minecraft:impossible" }
+  }
+}
