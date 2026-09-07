@@ -1,5 +1,7 @@
 # SmartHorde —— 让怪物不再"傻站着挨打"
 
+[简体中文](README.md) | [English](README.en.md) | [Русский](README.ru.md)
+
 **让怪物不再"傻站着挨打"，而是像真正的敌人一样思考、协作、翻墙、闪避、包抄你。**
 
 SmartHorde 是一个面向 Minecraft 1.21.1（NeoForge）的怪物 AI 增强模组。它为僵尸类怪物注入了一套完整的攻防走位 AI 体系，并提供了尸潮波次系统、Boss 战和难度分级。
