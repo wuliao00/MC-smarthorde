@@ -277,7 +277,8 @@ public final class SmartHordeCommands {
 
     private static int showStatus(CommandSourceStack source) {
         ServerLevel level = source.getLevel();
-        List<SmartZombie> zombies = level.getEntities(EntityTypeTest.forClass(SmartZombie.class), SmartZombie::isAlive);
+        List<? extends SmartZombie> zombies = level.getEntities(
+                EntityTypeTest.forClass(SmartZombie.class), SmartZombie::isAlive);
         long elites = zombies.stream().filter(z -> z.getEliteRole().isElite()).count();
         int bosses = level.getEntities(EntityTypeTest.forClass(HordeBoss.class), HordeBoss::isAlive).size();
         String preset = DifficultyManager.current().name().toLowerCase();

@@ -25,10 +25,11 @@ import net.neoforged.neoforge.client.gui.IConfigScreenFactory;
  */
 @Mod(value = SmartHordeMod.MODID, dist = Dist.CLIENT)
 @EventBusSubscriber(modid = SmartHordeMod.MODID, bus = EventBusSubscriber.Bus.MOD, value = Dist.CLIENT)
-public final class SmartHordeClient {
+public class SmartHordeClient {
 
     public SmartHordeClient(ModContainer container) {
-        container.registerExtensionPoint(IConfigScreenFactory.class, ConfigurationScreen::new);
+        container.registerExtensionPoint(IConfigScreenFactory.class,
+                (IConfigScreenFactory) (mc, parent) -> new ConfigurationScreen(mc, parent));
     }
 
     @SubscribeEvent
