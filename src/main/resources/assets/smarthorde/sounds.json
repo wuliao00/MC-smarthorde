@@ -28,5 +28,11 @@
     "sounds": [
       { "name": "smarthorde:smart_attack" }
     ]
+  },
+  "war_cry": {
+    "subtitle": "subtitle.smarthorde.war_cry",
+    "sounds": [
+      { "name": "smarthorde:war_cry" }
+    ]
   }
 }

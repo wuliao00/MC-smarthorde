@@ -67,10 +67,13 @@ public final class DifficultyManager {
     private DifficultyManager() {
     }
 
-    /** 当前生效预设：命令覆盖优先，否则读配置。 */
+    /** 当前生效预设：命令覆盖优先，否则安全读取配置。 */
     public static Preset current() {
         if (override != null) {
             return override;
+        }
+        if (!SmartHordeConfig.SPEC.isLoaded()) {
+            return Preset.NORMAL;
         }
         String raw = SmartHordeConfig.DIFFICULTY_PRESET.get();
         try {

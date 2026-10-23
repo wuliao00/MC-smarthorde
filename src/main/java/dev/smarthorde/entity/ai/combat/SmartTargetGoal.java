@@ -11,10 +11,13 @@ import java.util.List;
 
 /**
  * 智能目标选择：优先攻击 距离最近 + 血量最低 + 无护甲 的玩家。
- * 综合评分 = 距离 + 血量 x2 + 护甲值 x8，取分值最低者。
- * 同时用于 SmartZombie 与被注入的原版僵尸（VanillaMobEnhancer）。
+ * 综合评分 = 距离 + 血量 x2 + 护甲值 x8（无直视视线但在近距感知范围内附加遮挡惩罚），取分值最低者。
+ * 同时用于 SmartZombie、HordeBoss 与被注入的原版僵尸（VanillaMobEnhancer）。
  */
 public class SmartTargetGoal extends TargetGoal {
+
+    private static final double BLIND_SENSE_RANGE_SQR = 20.0 * 20.0;
+    private static final double OCCLUSION_PENALTY = 16.0;
 
     private final PathfinderMob mob;
 
@@ -22,15 +25,14 @@ public class SmartTargetGoal extends TargetGoal {
     private Player target;
 
     public SmartTargetGoal(PathfinderMob mob) {
-        super(mob, true, false);
+        super(mob, false, false);
         this.mob = mob;
+        this.setUnseenMemoryTicks(160);
     }
 
     @Override
     public boolean canUse() {
-        // 随机节流：约每 10 tick 执行一次目标扫描（与原版 NearestAttackableTargetGoal
-        // 的 randomInterval 相同模式）；已锁定目标的维持由 TargetGoal#canContinueToUse
-        // 负责，不受本节流影响，目标记忆逻辑保持正确
+        // 随机节流：约每 10 tick 执行一次目标扫描；已锁定目标由 TargetGoal#canContinueToUse 维持
         if (this.mob.getRandom().nextInt(10) != 0) {
             return false;
         }
@@ -42,11 +44,16 @@ public class SmartTargetGoal extends TargetGoal {
         Player best = null;
         double bestScore = Double.MAX_VALUE;
         for (Player player : candidates) {
-            if (!this.mob.getSensing().hasLineOfSight(player)) {
+            double distSqr = this.mob.distanceToSqr(player);
+            boolean hasLos = this.mob.getSensing().hasLineOfSight(player);
+            if (!hasLos && distSqr > BLIND_SENSE_RANGE_SQR) {
                 continue;
             }
-            double distance = Math.sqrt(this.mob.distanceToSqr(player));
-            double score = distance + player.getHealth() * 2.0 + player.getArmorValue() * 8.0;
+            double distance = Math.sqrt(distSqr);
+            double score = distance
+                    + player.getHealth() * 2.0
+                    + player.getArmorValue() * 8.0
+                    + (hasLos ? 0.0 : OCCLUSION_PENALTY);
             if (score < bestScore) {
                 bestScore = score;
                 best = player;

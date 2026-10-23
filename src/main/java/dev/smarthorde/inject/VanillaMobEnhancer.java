@@ -2,20 +2,26 @@ package dev.smarthorde.inject;
 
 import dev.smarthorde.SmartHordeMod;
 import dev.smarthorde.config.SmartHordeConfig;
+import dev.smarthorde.entity.HordeBoss;
+import dev.smarthorde.entity.SmartZombie;
 import dev.smarthorde.entity.ai.combat.SmartMeleeAttackGoal;
 import dev.smarthorde.entity.ai.combat.SmartTargetGoal;
 import dev.smarthorde.entity.ai.defense.DodgeGoal;
 import dev.smarthorde.entity.ai.movement.ClimbOrStackGoal;
 import dev.smarthorde.entity.ai.movement.FlankGoal;
 import dev.smarthorde.entity.ai.movement.MaintainDistanceGoal;
+import dev.smarthorde.entity.ai.movement.PeacefulStrollGoal;
 import dev.smarthorde.entity.ai.movement.SeparationGoal;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.ai.attributes.AttributeInstance;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.ai.goal.MeleeAttackGoal;
+import net.minecraft.world.entity.ai.goal.WaterAvoidingRandomStrollGoal;
 import net.minecraft.world.entity.ai.goal.WrappedGoal;
 import net.minecraft.world.entity.ai.goal.target.NearestAttackableTargetGoal;
+import net.minecraft.world.entity.monster.Drowned;
 import net.minecraft.world.entity.monster.Zombie;
+import net.minecraft.world.entity.monster.ZombifiedPiglin;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
@@ -26,16 +32,12 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 原版僵尸增强注入（无反射，全部走公开 API）：
- * 监听 EntityJoinLevelEvent，检查 inject.vanillaMobs 配置；
- * 排除 SmartZombie/HordeBoss；NBT tag "smarthorde_injected" 防重复；
- * 注入内容：
- * - 属性：血量 x1.5、速度 x1.15；
- * - 攻击：原版 MeleeAttackGoal 整体替换为招式化 SmartMeleeAttackGoal
- *   （带动态 MOVE 释放——否则它会一直占住 MOVE，饿死攀墙/包抄等战术目标）；
- * - 智能 AI：SmartTargetGoal（优先弱者）、四源闪避、绕侧包抄、分离防挤团、
- *   距离管理、攀爬/叠罗汉；
- * - 仅替换玩家的 NearestAttackableTargetGoal（优先级<=2），村民等目标保留原版行为。
+ * 原版陆地僵尸增强注入（无反射，全部走公开 API）：
+ * <ul>
+ *   <li>排除中立僵尸猪灵（避免下界无故主动敌对）与水生三叉戟溺尸（避免破坏游泳与远程投掷 AI）；</li>
+ *   <li>属性强化（血量 x1.5、速度 x1.15）通过 PersistentData 标记仅首次生成生效，防止读档重复叠乘；</li>
+ *   <li>每次实体入世幂等重装战术大脑，并将原版随机漫步替换为 {@link PeacefulStrollGoal} 防止交战中转身散步。</li>
+ * </ul>
  */
 @EventBusSubscriber(modid = SmartHordeMod.MODID)
 public final class VanillaMobEnhancer {
@@ -46,7 +48,7 @@ public final class VanillaMobEnhancer {
     private static final double SPEED_MULTIPLIER = 1.15;
     private static final double HEALTH_MULTIPLIER = 1.5;
 
-    /** 原版僵尸的玩家目标选择器位于优先级 2（村民为 3，予以保留）。 */
+    /** 原版僵尸的玩家目标选择器位于优先级 2（村民/铁傀儡为 3，予以保留）。 */
     private static final int PLAYER_TARGET_PRIORITY = 2;
 
     private static boolean loggedFirstInjection;
@@ -56,36 +58,35 @@ public final class VanillaMobEnhancer {
 
     @SubscribeEvent
     public static void onEntityJoinLevel(EntityJoinLevelEvent event) {
-        // 其他 mod 可能取消本次入世（如自定义生成逻辑），取消时不再注入
-        if (event.isCanceled()) {
-            return;
-        }
-        if (event.getLevel().isClientSide()) {
+        if (event.isCanceled() || event.getLevel().isClientSide()) {
             return;
         }
         Entity entity = event.getEntity();
         if (!(entity instanceof Zombie zombie)) {
             return;
         }
-        // 排除本 mod 实体（SmartZombie/HordeBoss 均 extends Zombie）
-        if (zombie instanceof dev.smarthorde.entity.SmartZombie
-                || zombie instanceof dev.smarthorde.entity.HordeBoss) {
+        if (zombie instanceof SmartZombie
+                || zombie instanceof HordeBoss
+                || zombie instanceof ZombifiedPiglin
+                || zombie instanceof Drowned) {
             return;
         }
-        if (!SmartHordeConfig.INJECT_VANILLA.get()) {
+        if (SmartHordeConfig.SPEC.isLoaded() && !SmartHordeConfig.INJECT_VANILLA.get()) {
             return;
         }
-        if (zombie.getPersistentData().getBoolean(INJECTED_TAG)) {
-            return;
-        }
-        zombie.getPersistentData().putBoolean(INJECTED_TAG, true);
 
-        applyStatBuffs(zombie);
-        upgradeBrain(zombie);
+        // 属性倍率随存档保留，仅首次标记时施加一次
+        if (!zombie.getPersistentData().getBoolean(INJECTED_TAG)) {
+            zombie.getPersistentData().putBoolean(INJECTED_TAG, true);
+            applyStatBuffs(zombie);
+        }
+
+        // Goal 选择器仅驻留内存，读档/区块恢复后幂等重装
+        upgradeBrainIdempotent(zombie);
 
         if (!loggedFirstInjection) {
             loggedFirstInjection = true;
-            LOGGER.info("[SmartHorde] Vanilla zombie enhanced: hp x{}, speed x{} + tactical AI goals installed",
+            LOGGER.info("[SmartHorde] Vanilla land zombie enhanced: hp x{}, speed x{} + tactical AI goals installed",
                     HEALTH_MULTIPLIER, SPEED_MULTIPLIER);
         }
     }
@@ -102,22 +103,25 @@ public final class VanillaMobEnhancer {
         }
     }
 
-    private static void upgradeBrain(Zombie zombie) {
-        // 0. 用招式化攻击整体替换原版 MeleeAttackGoal：原版实现长期持有 MOVE 标志，
-        //    会饿死下面注入的所有战术移动 Goal；SmartMeleeAttackGoal 出招/卡住时释放 MOVE
-        List<WrappedGoal> vanillaMelee = new ArrayList<>();
+    private static void upgradeBrainIdempotent(Zombie zombie) {
         for (WrappedGoal goal : zombie.goalSelector.getAvailableGoals()) {
-            if (goal.getGoal() instanceof MeleeAttackGoal
-                    && !(goal.getGoal() instanceof SmartMeleeAttackGoal)) {
-                vanillaMelee.add(goal);
+            if (goal.getGoal() instanceof SmartMeleeAttackGoal) {
+                return;
             }
         }
-        for (WrappedGoal goal : vanillaMelee) {
+
+        List<WrappedGoal> toRemoveGoals = new ArrayList<>();
+        for (WrappedGoal goal : zombie.goalSelector.getAvailableGoals()) {
+            if ((goal.getGoal() instanceof MeleeAttackGoal && !(goal.getGoal() instanceof SmartMeleeAttackGoal))
+                    || (goal.getGoal() instanceof WaterAvoidingRandomStrollGoal
+                    && !(goal.getGoal() instanceof PeacefulStrollGoal))) {
+                toRemoveGoals.add(goal);
+            }
+        }
+        for (WrappedGoal goal : toRemoveGoals) {
             zombie.goalSelector.removeGoal(goal.getGoal());
-            zombie.goalSelector.addGoal(goal.getPriority(), new SmartMeleeAttackGoal(zombie, 1.0D, false));
         }
 
-        // 1. 用 SmartTargetGoal 替换原版的玩家目标选择器（村民/其他敌对目标不受影响）
         List<WrappedGoal> playerTargeters = new ArrayList<>();
         for (WrappedGoal goal : zombie.targetSelector.getAvailableGoals()) {
             if (goal.getPriority() <= PLAYER_TARGET_PRIORITY
@@ -130,11 +134,12 @@ public final class VanillaMobEnhancer {
         }
         zombie.targetSelector.addGoal(PLAYER_TARGET_PRIORITY, new SmartTargetGoal(zombie));
 
-        // 2. 战术移动 AI（与 SmartZombie 同源实现）
         zombie.goalSelector.addGoal(1, new DodgeGoal(zombie));
-        zombie.goalSelector.addGoal(4, new FlankGoal(zombie, 1.2));
-        zombie.goalSelector.addGoal(5, new SeparationGoal(zombie));
+        zombie.goalSelector.addGoal(2, new ClimbOrStackGoal(zombie));
+        zombie.goalSelector.addGoal(3, new SmartMeleeAttackGoal(zombie, 1.05D, false));
+        zombie.goalSelector.addGoal(4, new SeparationGoal(zombie));
+        zombie.goalSelector.addGoal(5, new FlankGoal(zombie, 1.2));
         zombie.goalSelector.addGoal(6, new MaintainDistanceGoal(zombie, 1.05));
-        zombie.goalSelector.addGoal(8, new ClimbOrStackGoal(zombie));
+        zombie.goalSelector.addGoal(7, new PeacefulStrollGoal(zombie, 1.0));
     }
 }

@@ -5,8 +5,8 @@ import net.neoforged.neoforge.common.ModConfigSpec;
 import java.util.List;
 
 /**
- * 配置中心。所有键与《SmartHorde 完整文件清单》中的"配置默认值速查"一一对应。
- * ai.dodgeCooldownTicks 为清单补充键：DodgeGoal 冷却"从配置读取（默认 90 tick）"。
+ * 配置中心。保留全部既有配置键兼容旧版 smarthorde-server.toml，
+ * 并扩展精英兵种、Boss 主动技能、里程碑决战波配置及未加载安全读取封装。
  */
 public final class SmartHordeConfig {
 
@@ -19,7 +19,7 @@ public final class SmartHordeConfig {
 
     // ---------------- inject ----------------
     public static final ModConfigSpec.BooleanValue INJECT_VANILLA = BUILDER
-            .comment("增强原版僵尸（速度 x1.15、血量 x1.5、替换目标选择器）")
+            .comment("增强原版僵尸（速度 x1.15、血量 x1.5、替换目标选择器与战术 AI）")
             .define("inject.vanillaMobs", true);
 
     // ---------------- boss ----------------
@@ -38,6 +38,10 @@ public final class SmartHordeConfig {
     public static final ModConfigSpec.BooleanValue BOSS_SUMMONS_HORDE_ON_PHASE = BUILDER
             .comment("Boss 切阶段时召唤仆从（冷却 5 秒）")
             .define("boss.summonsHordeOnPhase", true);
+
+    public static final ModConfigSpec.BooleanValue BOSS_ABILITIES_ENABLED = BUILDER
+            .comment("启用 Boss 四变体专属主动战技（震地咆哮/疫毒迷雾/凛冬霜环/烈焰新星）")
+            .define("boss.abilitiesEnabled", true);
 
     public static final ModConfigSpec.ConfigValue<List<? extends Double>> BOSS_PHASE_THRESHOLDS = BUILDER
             .comment("Boss 阶段切换血量阈值（降序）")
@@ -60,6 +64,26 @@ public final class SmartHordeConfig {
     public static final ModConfigSpec.IntValue HORDE_COUNTDOWN_SECONDS = BUILDER
             .comment("波间准备时间（秒）")
             .defineInRange("horde.countdownSeconds", 5, 1, 120);
+
+    public static final ModConfigSpec.DoubleValue ELITE_SPAWN_CHANCE = BUILDER
+            .comment("智能僵尸进化为精英战术兵种（突袭者/重装先锋/狂血战鬼/百夫长）的基础概率")
+            .defineInRange("horde.eliteChance", 0.35, 0.0, 1.0);
+
+    public static final ModConfigSpec.BooleanValue ELITE_EQUIPMENT_ENABLED = BUILDER
+            .comment("精英兵种生成时是否配备专属战术武器与盾牌（零掉落防刷物）")
+            .define("horde.eliteEquipment", true);
+
+    public static final ModConfigSpec.BooleanValue HORDE_BOSS_MILESTONE_WAVE = BUILDER
+            .comment("尸潮每满 5 波（或总波数>=5 的最终决战波）自动伴随一位尸潮领主参战")
+            .define("horde.bossOnMilestoneWave", true);
+
+    public static final ModConfigSpec.BooleanValue HORDE_FAIL_ON_DEATH = BUILDER
+            .comment("玩家在尸潮进行中阵亡时立即判定本次尸潮挑战失败并清理波次怪")
+            .define("horde.failOnDeath", true);
+
+    public static final ModConfigSpec.IntValue HORDE_HORN_WAVES = BUILDER
+            .comment("生存模式吹响智潮战号（horde_horn）触发的尸潮波数")
+            .defineInRange("horde.hornWaves", 5, 1, 20);
 
     // ---------------- effects ----------------
     public static final ModConfigSpec.BooleanValue PARTICLES_ENABLED = BUILDER
@@ -86,5 +110,58 @@ public final class SmartHordeConfig {
     public static final ModConfigSpec SPEC = BUILDER.build();
 
     private SmartHordeConfig() {
+    }
+
+    /** 客户端渲染阶段安全读取（避免 SERVER 配置尚未同步时抛出 IllegalStateException）。 */
+    public static boolean isHeadHealthBarEnabledSafe() {
+        return !SPEC.isLoaded() || HEAD_HEALTH_BAR.get();
+    }
+
+    public static boolean isParticlesEnabledSafe() {
+        return !SPEC.isLoaded() || PARTICLES_ENABLED.get();
+    }
+
+    public static boolean isSoundsEnabledSafe() {
+        return !SPEC.isLoaded() || SOUNDS_ENABLED.get();
+    }
+
+    public static int maxParticlesSafe() {
+        return SPEC.isLoaded() ? MAX_PARTICLES.get() : 48;
+    }
+
+    public static boolean isBossEnabledSafe() {
+        return !SPEC.isLoaded() || BOSS_ENABLED.get();
+    }
+
+    public static boolean isBossBarEnabledSafe() {
+        return !SPEC.isLoaded() || BOSS_BAR_ENABLED.get();
+    }
+
+    public static boolean isHordeEnabledSafe() {
+        return !SPEC.isLoaded() || HORDE_ENABLED.get();
+    }
+
+    public static int hordeBaseCountSafe() {
+        return SPEC.isLoaded() ? HORDE_BASE_COUNT.get() : 7;
+    }
+
+    public static int hordeCountPerWaveSafe() {
+        return SPEC.isLoaded() ? HORDE_COUNT_PER_WAVE.get() : 3;
+    }
+
+    public static int hordeCountdownSecondsSafe() {
+        return SPEC.isLoaded() ? HORDE_COUNTDOWN_SECONDS.get() : 5;
+    }
+
+    public static boolean isHordeBossMilestoneWaveSafe() {
+        return !SPEC.isLoaded() || HORDE_BOSS_MILESTONE_WAVE.get();
+    }
+
+    public static boolean isHordeFailOnDeathSafe() {
+        return !SPEC.isLoaded() || HORDE_FAIL_ON_DEATH.get();
+    }
+
+    public static int hordeHornWavesSafe() {
+        return SPEC.isLoaded() ? HORDE_HORN_WAVES.get() : 5;
     }
 }

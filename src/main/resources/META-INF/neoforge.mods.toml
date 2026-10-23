@@ -4,7 +4,7 @@ license = "MIT"
 
 [[mods]]
 modId = "smarthorde"
-version = "1.0.2"
+version = "${mod_version}"
 displayName = "SmartHorde"
 authors = "SmartHorde Dev"
 description = '''

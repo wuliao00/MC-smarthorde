@@ -11,72 +11,94 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.Vec3;
 
 /**
- * 粒子+音效集中管线。
- * 受 effects.particlesEnabled / effects.soundsEnabled 控制；
- * 粒子数量封顶 performance.maxParticles（默认 48）。
+ * 粒子与音效统一出口：全部受 {@code effects.particlesEnabled} / {@code effects.soundsEnabled}
+ * 与 {@code performance.maxParticles} 约束，且均通过安全封装读取以防配置尚未加载时抛异常。
  */
 public final class EffectManager {
 
     private EffectManager() {
     }
 
-    /** 攻击特效：telegraph=true 时头顶冒 CRIT 预警粒子；否则为命中横扫粒子。 */
-    public static void spawnAttackParticles(ServerLevel level, Vec3 center, boolean telegraph) {
-        if (!SmartHordeConfig.PARTICLES_ENABLED.get()) {
+    /** 尸潮来袭：火焰粒子脉冲 + 号角音效。 */
+    public static void spawnHordeStartEffect(ServerLevel level, Vec3 pos) {
+        if (SmartHordeConfig.isParticlesEnabledSafe()) {
+            int count = Math.min(32, SmartHordeConfig.maxParticlesSafe());
+            level.sendParticles(ParticleTypes.FLAME, pos.x, pos.y + 1.0, pos.z, count, 1.5, 0.8, 1.5, 0.04);
+        }
+        if (SmartHordeConfig.isSoundsEnabledSafe()) {
+            level.playSound(null, pos.x, pos.y, pos.z,
+                    ModSounds.HORDE_WAVE_START.get(), SoundSource.HOSTILE, 1.5F, 1.0F);
+        }
+    }
+
+    /** 波次清除：村民开心粒子 + 丧钟余韵。 */
+    public static void spawnWaveClearEffect(ServerLevel level, Vec3 pos) {
+        if (SmartHordeConfig.isParticlesEnabledSafe()) {
+            int count = Math.min(24, SmartHordeConfig.maxParticlesSafe());
+            level.sendParticles(ParticleTypes.HAPPY_VILLAGER, pos.x, pos.y + 1.2, pos.z, count, 1.2, 0.8, 1.2, 0.05);
+        }
+        if (SmartHordeConfig.isSoundsEnabledSafe()) {
+            level.playSound(null, pos.x, pos.y, pos.z,
+                    ModSounds.HORDE_WAVE_CLEAR.get(), SoundSource.HOSTILE, 1.2F, 1.0F);
+        }
+    }
+
+    /** 闪避成功：烟雾残影。 */
+    public static void spawnDodgeParticles(ServerLevel level, Vec3 pos) {
+        if (!SmartHordeConfig.isParticlesEnabledSafe()) {
+            return;
+        }
+        int count = Math.min(8, SmartHordeConfig.maxParticlesSafe());
+        level.sendParticles(ParticleTypes.CLOUD, pos.x, pos.y + 0.5, pos.z, count, 0.25, 0.2, 0.25, 0.04);
+    }
+
+    /** 招式蓄力或命中：愤怒村民（前摇预警）/ 暴击火花（命中反馈）。 */
+    public static void spawnAttackParticles(ServerLevel level, Vec3 pos, boolean telegraph) {
+        if (!SmartHordeConfig.isParticlesEnabledSafe()) {
             return;
         }
         if (telegraph) {
-            send(level, ParticleTypes.CRIT, center, 6, 0.25, 0.1, 0.25, 0.05);
+            level.sendParticles(ParticleTypes.ANGRY_VILLAGER, pos.x, pos.y, pos.z, 1, 0.15, 0.1, 0.15, 0.0);
         } else {
-            send(level, ParticleTypes.SWEEP_ATTACK, center, 2, 0.1, 0.1, 0.1, 0.0);
+            int count = Math.min(8, SmartHordeConfig.maxParticlesSafe());
+            level.sendParticles(ParticleTypes.CRIT, pos.x, pos.y, pos.z, count, 0.2, 0.2, 0.2, 0.1);
         }
     }
 
-    /** 闪避烟尘。 */
-    public static void spawnDodgeParticles(ServerLevel level, Vec3 center) {
-        if (!SmartHordeConfig.PARTICLES_ENABLED.get()) {
+    /** 尸潮百夫长战吼特效：金色冲击波环 + 震天战吼声。 */
+    public static void spawnWarCryEffect(ServerLevel level, Entity source) {
+        if (SmartHordeConfig.isParticlesEnabledSafe()) {
+            spawnRingParticles(level, source.position().add(0, 0.35, 0),
+                    ParticleTypes.FLAME, 2.6, 16, 0.03);
+            int burst = Math.min(10, SmartHordeConfig.maxParticlesSafe());
+            level.sendParticles(ParticleTypes.ENCHANTED_HIT,
+                    source.getX(), source.getY() + source.getBbHeight() * 0.85, source.getZ(),
+                    burst, 0.35, 0.35, 0.35, 0.12);
+        }
+        if (SmartHordeConfig.isSoundsEnabledSafe()) {
+            level.playSound(null, source, ModSounds.WAR_CRY.get(), SoundSource.HOSTILE, 1.3F, 1.0F);
+        }
+    }
+
+    /** 通用水平圆环粒子扩散（受 maxParticles 安全裁剪）。 */
+    public static void spawnRingParticles(ServerLevel level, Vec3 center, ParticleOptions particle,
+                                          double radius, int steps, double speed) {
+        if (!SmartHordeConfig.isParticlesEnabledSafe()) {
             return;
         }
-        send(level, ParticleTypes.CLOUD, center.add(0, 0.3, 0), 6, 0.3, 0.1, 0.3, 0.02);
-    }
-
-    /** 尸潮来袭：火焰环绕 + 战号音效。 */
-    public static void spawnHordeStartEffect(ServerLevel level, Vec3 center) {
-        if (SmartHordeConfig.PARTICLES_ENABLED.get()) {
-            send(level, ParticleTypes.FLAME, center.add(0, 1, 0), 24, 1.5, 0.5, 1.5, 0.01);
+        int clampedSteps = Math.max(4, Math.min(steps, SmartHordeConfig.maxParticlesSafe()));
+        for (int i = 0; i < clampedSteps; i++) {
+            double theta = (Math.PI * 2.0 * i) / clampedSteps;
+            double px = center.x + Math.cos(theta) * radius;
+            double pz = center.z + Math.sin(theta) * radius;
+            level.sendParticles(particle, px, center.y, pz, 1, 0.05, 0.05, 0.05, speed);
         }
-        playSfx(level, center, ModSounds.HORDE_WAVE_START.get(), 1.2F, 1.0F);
     }
 
-    /** 清波庆祝：烟花/快乐粒子 + 音效。 */
-    public static void spawnWaveClearEffect(ServerLevel level, Vec3 center) {
-        if (SmartHordeConfig.PARTICLES_ENABLED.get()) {
-            send(level, ParticleTypes.HAPPY_VILLAGER, center.add(0, 1.5, 0), 20, 1.0, 0.8, 1.0, 0.1);
-            send(level, ParticleTypes.FIREWORK, center.add(0, 2.0, 0), 12, 0.6, 0.6, 0.6, 0.05);
-        }
-        playSfx(level, center, ModSounds.HORDE_WAVE_CLEAR.get(), 1.0F, 1.0F);
-    }
-
-    /** 音效播放统一入口（受 soundsEnabled 控制）。 */
-    public static void playSfx(ServerLevel level, Vec3 pos, SoundEvent sound, float volume, float pitch) {
-        if (!SmartHordeConfig.SOUNDS_ENABLED.get()) {
-            return;
-        }
-        level.playSound(null, pos.x, pos.y, pos.z, sound, SoundSource.HOSTILE, volume, pitch);
-    }
-
-    /** 实体音效（跟随实体位置与移动）。 */
+    /** 播放受控音效。 */
     public static void playSfx(ServerLevel level, Entity entity, SoundEvent sound, float volume, float pitch) {
-        if (!SmartHordeConfig.SOUNDS_ENABLED.get()) {
-            return;
+        if (SmartHordeConfig.isSoundsEnabledSafe()) {
+            level.playSound(null, entity, sound, SoundSource.HOSTILE, volume, pitch);
         }
-        level.playSound(null, entity, sound, SoundSource.HOSTILE, volume, pitch);
-    }
-
-    private static void send(ServerLevel level, ParticleOptions particle, Vec3 center,
-                             int count, double spreadX, double spreadY, double spreadZ, double speed) {
-        int capped = Math.min(count, SmartHordeConfig.MAX_PARTICLES.get());
-        level.sendParticles(particle, center.x, center.y, center.z,
-                capped, spreadX, spreadY, spreadZ, speed);
     }
 }
