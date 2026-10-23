@@ -8,17 +8,23 @@ SmartHorde is a mob AI enhancement mod for Minecraft 1.21.1 (NeoForge). It injec
 
 ## Core Features
 
-### Smart Zombie (SmartZombie)
+### Smart Zombie & Elite Roles (SmartZombie)
 
-A zombie with a full tactical AI, capable of:
+A zombie with custom multi-part 3D geometry (`128×128`), full-bright emissive glow layers, and grounded anti-clipping procedural animations:
 
-- **Combo attacks**: four moves — light hit, sweep, heavy strike, and thrust — each with its own wind-up, range, arc angle, and cooldown
-- **Flanking**: when facing you head-on, it moves toward your sides and rear, forcing you to turn or expose your back
-- **Distance management**: backs off to a comfortable range when too close before attacking; cuts in diagonally instead of chasing in a straight line when kited
-- **Separation**: multiple mobs never stack on the same spot — they spread out to form an encirclement
-- **Wall climbing**: spider-style wall climbing up any wall (up to 6 blocks; a single mob can climb independently) and automatically opens wooden doors
-- **Three-source dodging**: dodge after being hit, sidestep when aimed at with a bow, sidestep when your crosshair points at it (melee point-blank aiming triggers this too), and dash-dodge when an incoming arrow is detected (each dodge has a cooldown)
-- **Smart target selection**: prioritizes the nearest player with the lowest health and no armor
+- **Custom 3D multi-part meshes & emissive glow**: sculpted brow ridges, vambraces, belt harnesses, and role-specific 3D gear (hollowed assassin cowl + dual wrist-blades, slitted barbute visor + layered pauldrons, swept bone horns + dorsal spines, jagged gilded crown + centurion plume + flowing cape) paired with night-glowing `_glow.png` overlays
+- **Grounded anti-clipping kinematics**: smooth 60fps forward-time keyframes for light slash, heavy smash, wide sweep, thrust lunge, wall-climbing, dodge, shield-wall advance, and war-cry; upper-body drop keeps feet planted on the ground without floating, and offhand shields stay braced away from the skull
+- **Five tactical roles**:
+  - **Smart Zombie (`standard`)**: balanced tactical infantry wearing an open-crown 3D tactical headband with glowing ocular sensor, asymmetric left pauldron, and field pack
+  - **Gale Raider (`raider`)**: agile flanker with higher speed and shorter dodge cooldown
+  - **Heavy Vanguard (`vanguard`)**: armored tank advancing behind a raised offhand shield (counter with an axe strike to trigger a 5s shield-break!)
+  - **Blood Berserker (`berserker`)**: enters Blood Frenzy below 50% HP with surging move and attack speed
+  - **Horde Centurion (`commander`)**: squad leader whose War Cry rallies nearby zombie allies with Speed & Strength
+- **Smart encirclement & strafe spacing**: flanks toward the less-crowded side of the target and uses target-facing `strafe` steps instead of turning its back (eliminating 180° neck-twist clipping)
+- **Soft anti-overlap separation**: prevents multiple zombies from stacking inside the same block space during melee swarms
+- **Wall climbing & door opening**: climbs walls up to 6 blocks with ledge vaulting and automatically opens wooden doors
+- **Terrain-aware dodging**: checks obstacle & cliff clearance before dodging hits, archers, crosshair lock-ons, or incoming arrows
+- **Smart target selection & ally alert**: prioritizes nearby low-HP unarmored players and rallies nearby allies when struck
 
 ### Vanilla Zombie Enhancement (enabled by default)
 
@@ -28,12 +34,14 @@ Works out of the box — all naturally spawned vanilla zombies automatically gai
 
 One command to start a survival stress test:
 
-- `/smarthorde wave start 5` starts a 5-wave horde
-- Scaling waves: wave 1 spawns 7 mobs, wave 2 spawns 10, wave 3 spawns 13... more and more as it goes
-- Ring spawning: mobs spawn in a ring 24–32 blocks around you — never stuck in walls or floating in the air
-- 5 seconds of prep time between waves, with a live countdown in chat
-- Clearing a wave rewards emeralds + XP; clearing them all wins a diamond jackpot
-- A top-screen HUD shows live wave progress, remaining mobs, and phase status
+- `/smarthorde wave start 5` starts a 5-wave horde (non-OP Survival players can also craft or loot the **SmartHorde War Horn (`smarthorde:horde_horn`)** — hold right-click to blow the horn and start a horde trial, or sneak + right-click to inspect active wave progress; Creative Spawn Eggs are included in the Spawn Eggs tab)
+- Scaling waves: wave 1 spawns 7 mobs, wave 2 spawns 10, wave 3 spawns 13... with a milestone Horde Boss joining every 5th / climax wave
+- Ring spawning & fair trial rules: mobs spawn safely in a 24–32 block ring around you; dying mid-horde (`horde.failOnDeath`) or fleeing >144 blocks aborts the trial cleanly
+- 5 seconds of prep time between waves, with a BossBar-aware top HUD showing live progress and straggler glow beacons
+- Clearing a wave rewards emeralds + XP; clearing them all wins a diamond jackpot; configurable in-game via **Mods → SmartHorde → Config** or `smarthorde-server.toml`
+- **Craftable Tactical Counter-Gear**:
+  - **SmartHorde Tactical Helm (`smarthorde:smart_helmet`)**: custom 3D emerald-visor armor model, reduces incoming SmartZombie/Boss damage by **15%**, and periodically highlights flanking Raiders and occluded ambushers within 16m
+  - **SmartHorde Vanguard Blade (`smarthorde:smart_sword`)**: deals **+25%** bonus damage to Elite SmartZombies & Horde Bosses and shatters Heavy Vanguard shield guards for 3.5s
 
 ### Boss: Horde Lord
 
@@ -70,13 +78,16 @@ All effects and sounds can be toggled independently in the config.
 | Command | Description |
 |------|------|
 | `/smarthorde difficulty [preset]` | Switch difficulty (easy/normal/hard/nightmare) |
-| `/smarthorde summon [count]` | Manually summon a given number of SmartZombies |
-| `/smarthorde summon-boss [variant]` | Summon the Horde Lord (brute/plague/frost/inferno) |
-| `/smarthorde wave start [waves]` | Start a horde with the given number of waves |
-| `/smarthorde wave stop` | Stop the current horde |
+| `/smarthorde summon [count] [role]` | Summon SmartZombies with optional role (standard/raider/vanguard/berserker/commander/random) |
+| `/smarthorde summon-boss [variant]` | Safely summon the Horde Lord (brute/plague/frost/inferno) with active variant skills |
+| `/smarthorde wave start [waves]` | Start a horde (milestone Boss joins every 5th / climax wave) |
+| `/smarthorde wave stop` | Stop the current horde and clear remaining wave mobs |
+| `/smarthorde wave skip` | Skip current countdown or wave stage |
 | `/smarthorde wave info` | Show current wave info |
+| `/smarthorde clear` | Clear all SmartZombies and Horde Bosses in the current dimension |
+| `/smarthorde status` | Inspect active difficulty, SmartZombie/elite/boss counts, and active wave sessions |
 | `/smarthorde top` | Horde leaderboard (online players) |
-| `/smarthorde stats` | Personal combat statistics |
+| `/smarthorde stats` | Personal combat statistics (including elites & bosses slain) |
 
 ## Configuration
 

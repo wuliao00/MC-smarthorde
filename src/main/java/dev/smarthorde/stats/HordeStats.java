@@ -12,15 +12,15 @@ import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.entity.living.LivingDeathEvent;
+import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
  * 尸潮统计与成就：
- * - 每玩家统计（清波数/通关数/击杀智能僵尸/Boss 数）存于玩家 PersistentData，随存档持久化；
+ * - 每玩家统计（清波数/通关数/击杀智能僵尸/击杀精英/击杀 Boss 数）存于玩家 PersistentData，随存档持久化；
  * - 击杀类成就由数据包 advancement + 原版 player_killed_entity 触发器完成；
  * - 波次/通关/噩梦难度成就由本类在对应时机代码授予。
- * 排行榜数据源：/smarthorde top 按通关数+清波数排序在线玩家。
  */
 @EventBusSubscriber(modid = SmartHordeMod.MODID)
 public final class HordeStats {
@@ -30,6 +30,7 @@ public final class HordeStats {
     public static final String WAVES_CLEARED = "wavesCleared";
     public static final String HORDES_COMPLETED = "hordesCompleted";
     public static final String ZOMBIES_KILLED = "zombiesKilled";
+    public static final String ELITES_KILLED = "elitesKilled";
     public static final String BOSSES_KILLED = "bossesKilled";
 
     private static final String TAG = "smarthorde_stats";
@@ -37,20 +38,40 @@ public final class HordeStats {
     private HordeStats() {
     }
 
-    // ---------------- 击杀监听 ----------------
-
+    /**
+     * 玩家阵亡重生或从末地传送门返回主世界时，Minecraft 会克隆新的 ServerPlayer 实例；
+     * 将 smarthorde_stats 从旧实体完整迁移到新实体，防止终身战绩与排行榜分数丢失清零。
+     */
     @SubscribeEvent
-    public static void onLivingDeath(LivingDeathEvent event) {
-        if (event.getSource().getEntity() instanceof ServerPlayer player) {
-            if (event.getEntity() instanceof SmartZombie) {
-                add(player, ZOMBIES_KILLED, 1);
-            } else if (event.getEntity() instanceof HordeBoss) {
-                add(player, BOSSES_KILLED, 1);
-            }
+    public static void onPlayerClone(PlayerEvent.Clone event) {
+        CompoundTag oldData = event.getOriginal().getPersistentData();
+        if (oldData.contains(TAG)) {
+            event.getEntity().getPersistentData().put(TAG, oldData.getCompound(TAG).copy());
         }
     }
 
-    // ---------------- 波次/通关钩子（HordeWaveManager 调用） ----------------
+    @SubscribeEvent
+    public static void onLivingDeath(LivingDeathEvent event) {
+        ServerPlayer player = null;
+        if (event.getSource().getEntity() instanceof ServerPlayer directPlayer) {
+            player = directPlayer;
+        } else if (event.getEntity().getKillCredit() instanceof ServerPlayer creditPlayer) {
+            player = creditPlayer;
+        }
+        if (player != null) {
+            if (event.getEntity() instanceof SmartZombie smartZombie) {
+                add(player, ZOMBIES_KILLED, 1);
+                grant(player, "first_blood");
+                if (smartZombie.getEliteRole().isElite()) {
+                    add(player, ELITES_KILLED, 1);
+                    grant(player, "elite_hunter");
+                }
+            } else if (event.getEntity() instanceof HordeBoss) {
+                add(player, BOSSES_KILLED, 1);
+                grant(player, "boss_slayer");
+            }
+        }
+    }
 
     public static void onWaveCleared(ServerPlayer player) {
         add(player, WAVES_CLEARED, 1);
@@ -64,8 +85,6 @@ public final class HordeStats {
             grant(player, "nightmare_finish");
         }
     }
-
-    // ---------------- 数据读写 ----------------
 
     public static int get(ServerPlayer player, String key) {
         return data(player).getInt(key);
@@ -82,15 +101,14 @@ public final class HordeStats {
         return player.getPersistentData().getCompound(TAG);
     }
 
-    /** 排行榜排序分：通关数优先，其次清波数。 */
+    /** 排行榜排序分：通关数优先，其次清波数、Boss 击杀与普通击杀。 */
     public static long leaderboardScore(ServerPlayer player) {
-        return get(player, HORDES_COMPLETED) * 1_000_000L + get(player, WAVES_CLEARED) * 1_000L
+        return get(player, HORDES_COMPLETED) * 1_000_000L
+                + get(player, WAVES_CLEARED) * 1_000L
+                + get(player, BOSSES_KILLED) * 100L
                 + get(player, ZOMBIES_KILLED);
     }
 
-    // ---------------- 成就授予 ----------------
-
-    /** 代码授予成就：smarthorde:<path>，授予其全部 criteria（JSON 中均为单一 criterion）。 */
     public static void grant(ServerPlayer player, String path) {
         MinecraftServer server = player.getServer();
         if (server == null) {

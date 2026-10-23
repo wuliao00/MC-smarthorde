@@ -1,10 +1,11 @@
 package dev.smarthorde;
 
 import com.mojang.logging.LogUtils;
+import dev.smarthorde.config.SmartHordeConfig;
 import dev.smarthorde.init.ModEntities;
+import dev.smarthorde.init.ModItems;
 import dev.smarthorde.init.ModNetworking;
 import dev.smarthorde.init.ModSounds;
-import dev.smarthorde.config.SmartHordeConfig;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.common.Mod;
@@ -23,6 +24,7 @@ public class SmartHordeMod {
 
     public SmartHordeMod(IEventBus modBus, ModContainer container) {
         ModEntities.register(modBus);
+        ModItems.register(modBus);
         ModSounds.register(modBus);
         ModNetworking.register(modBus);
 

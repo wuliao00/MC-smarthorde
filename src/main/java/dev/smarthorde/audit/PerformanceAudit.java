@@ -30,7 +30,7 @@ public final class PerformanceAudit {
 
     @SubscribeEvent
     public static void onServerTick(ServerTickEvent.Post event) {
-        if (!SmartHordeConfig.AUDIT_ENABLED.get()) {
+        if (!SmartHordeConfig.SPEC.isLoaded() || !SmartHordeConfig.AUDIT_ENABLED.get()) {
             return;
         }
         if (++tickCounter < AUDIT_INTERVAL_TICKS) {

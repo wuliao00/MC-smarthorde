@@ -2,7 +2,11 @@ package dev.smarthorde.entity;
 
 import dev.smarthorde.config.DifficultyManager;
 import dev.smarthorde.config.SmartHordeConfig;
+import dev.smarthorde.entity.ai.combat.BossAbilityGoal;
 import dev.smarthorde.entity.ai.combat.BossPhaseManager;
+import dev.smarthorde.entity.ai.combat.SmartMeleeAttackGoal;
+import dev.smarthorde.entity.ai.combat.SmartTargetGoal;
+import dev.smarthorde.entity.ai.movement.PeacefulStrollGoal;
 import dev.smarthorde.horde.HordeWaveSpawner;
 import dev.smarthorde.init.ModLootTables;
 import dev.smarthorde.init.ModSounds;
@@ -19,6 +23,7 @@ import net.minecraft.server.level.ServerBossEvent;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundSource;
+import net.minecraft.util.Mth;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.BossEvent;
 import net.minecraft.world.DifficultyInstance;
@@ -27,6 +32,7 @@ import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.MobSpawnType;
 import net.minecraft.world.entity.SpawnGroupData;
@@ -34,13 +40,10 @@ import net.minecraft.world.entity.ai.attributes.AttributeInstance;
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.ai.goal.FloatGoal;
-import net.minecraft.world.entity.ai.goal.MeleeAttackGoal;
-import net.minecraft.world.entity.ai.goal.WaterAvoidingRandomStrollGoal;
 import net.minecraft.world.entity.ai.goal.target.HurtByTargetGoal;
-import net.minecraft.world.entity.ai.goal.target.NearestAttackableTargetGoal;
 import net.minecraft.world.entity.monster.Monster;
 import net.minecraft.world.entity.monster.Zombie;
-import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.LevelAccessor;
 import net.minecraft.world.level.ServerLevelAccessor;
@@ -49,15 +52,14 @@ import net.minecraft.world.level.storage.loot.LootTable;
 import javax.annotation.Nullable;
 
 /**
- * Boss 实体：阶段化（BossPhaseManager 按血量阈值切阶段）+ BossBar + 四变体。
- * 变体决定：属性倍率、命中附加效果、BossBar 配色、仆从数量、光环粒子与名称，
- * 变体索引经 SynchedEntityData 同步并写入 NBT 持久化。
+ * 尸潮领主 Boss 实体：
+ * 阶段化（{@link BossPhaseManager}）+ BossBar + 四大元素变体 + 招式化近战 + 变体主动战技（{@link BossAbilityGoal}），
+ * 同步招式进度与战斗警戒态供 {@code HordeBossModel} 渲染泰坦级立体骨骼与怒吼动画。
  */
-public class HordeBoss extends Zombie {
+public class HordeBoss extends Zombie implements TacticalAttacker {
 
     /** Boss 变体定义 */
     public enum Variant {
-        //        id        血量  伤害 攻速  护甲加成 仆从基数 命中效果
         BRUTE("brute", 1.00, 1.00, 1.00, 0, 4, HitEffect.KNOCKBACK,
                 new BossEvent.BossBarColor[]{BossEvent.BossBarColor.WHITE, BossEvent.BossBarColor.BLUE, BossEvent.BossBarColor.PURPLE, BossEvent.BossBarColor.RED},
                 null),
@@ -97,6 +99,10 @@ public class HordeBoss extends Zombie {
             this.auraParticle = auraParticle;
         }
 
+        public String getSerializedName() {
+            return this.id;
+        }
+
         public String nameKey() {
             return "entity.smarthorde.horde_boss." + this.id;
         }
@@ -126,15 +132,21 @@ public class HordeBoss extends Zombie {
             SynchedEntityData.defineId(HordeBoss.class, EntityDataSerializers.INT);
     private static final EntityDataAccessor<Integer> VARIANT_INDEX =
             SynchedEntityData.defineId(HordeBoss.class, EntityDataSerializers.INT);
+    private static final EntityDataAccessor<Integer> ATTACK_ID =
+            SynchedEntityData.defineId(HordeBoss.class, EntityDataSerializers.INT);
+    private static final EntityDataAccessor<Integer> ATTACK_TICKS =
+            SynchedEntityData.defineId(HordeBoss.class, EntityDataSerializers.INT);
 
-    private static final int SUMMON_COOLDOWN_TICKS = 100; // 5 秒
+    private static final int SUMMON_COOLDOWN_TICKS = 100;
     private static final int AURA_INTERVAL_TICKS = 30;
+    private static final String TAG_STATS_INIT = "BossStatsInitialized";
 
     private final ServerBossEvent bossBar;
     private final BossPhaseManager phaseManager = new BossPhaseManager(this);
 
     private int lastSummonTick = -SUMMON_COOLDOWN_TICKS;
     private boolean variantLocked;
+    private boolean statsInitialized;
 
     public HordeBoss(EntityType<? extends Zombie> type, Level level) {
         super(type, level);
@@ -146,13 +158,12 @@ public class HordeBoss extends Zombie {
     }
 
     public static AttributeSupplier.Builder createAttributes() {
-        // 与文档对齐：200 血量 / 10 伤害 / 0.8 击退抗性 / 8 护甲
         return Zombie.createAttributes()
                 .add(Attributes.MAX_HEALTH, 200.0)
                 .add(Attributes.MOVEMENT_SPEED, 0.30)
                 .add(Attributes.ATTACK_DAMAGE, 10.0)
                 .add(Attributes.ATTACK_SPEED, 1.0)
-                .add(Attributes.ARMOR, 8.0)
+                .add(Attributes.ARMOR, 10.0)
                 .add(Attributes.KNOCKBACK_RESISTANCE, 0.8)
                 .add(Attributes.FOLLOW_RANGE, 64.0)
                 .add(Attributes.STEP_HEIGHT, 1.05);
@@ -163,16 +174,50 @@ public class HordeBoss extends Zombie {
         super.defineSynchedData(builder);
         builder.define(PHASE, 0);
         builder.define(VARIANT_INDEX, Variant.BRUTE.ordinal());
+        builder.define(ATTACK_ID, TacticalAttacker.ATTACK_NONE);
+        builder.define(ATTACK_TICKS, 0);
     }
 
     @Override
     protected void registerGoals() {
         this.goalSelector.addGoal(0, new FloatGoal(this));
-        this.goalSelector.addGoal(2, new MeleeAttackGoal(this, 1.1, true));
-        this.goalSelector.addGoal(7, new WaterAvoidingRandomStrollGoal(this, 1.0));
+        this.goalSelector.addGoal(1, new BossAbilityGoal(this));
+        this.goalSelector.addGoal(2, new SmartMeleeAttackGoal(this, 1.15, true));
+        this.goalSelector.addGoal(7, new PeacefulStrollGoal(this, 1.0));
 
-        this.targetSelector.addGoal(1, new HurtByTargetGoal(this));
-        this.targetSelector.addGoal(2, new NearestAttackableTargetGoal<>(this, Player.class, false));
+        // 忽略友方仆从误碰，被玩家攻击时召唤周围智能僵尸协同围攻
+        this.targetSelector.addGoal(1, new HurtByTargetGoal(this, SmartZombie.class).setAlertOthers(SmartZombie.class));
+        this.targetSelector.addGoal(2, new SmartTargetGoal(this));
+    }
+
+    // ---------------- TacticalAttacker ----------------
+
+    @Override
+    public int getAttackId() {
+        return this.entityData.get(ATTACK_ID);
+    }
+
+    @Override
+    public void setAttackId(int attackId) {
+        this.entityData.set(ATTACK_ID, attackId);
+    }
+
+    @Override
+    public int getAttackTicks() {
+        return this.entityData.get(ATTACK_TICKS);
+    }
+
+    @Override
+    public void setAttackTicks(int attackTicks) {
+        this.entityData.set(ATTACK_TICKS, attackTicks);
+    }
+
+    public int getAttackAnimType() {
+        return getAttackId();
+    }
+
+    public int getAttackAnimTick() {
+        return getAttackTicks();
     }
 
     // ---------------- 变体 ----------------
@@ -181,16 +226,16 @@ public class HordeBoss extends Zombie {
         return Variant.byOrdinal(this.entityData.get(VARIANT_INDEX));
     }
 
-    /** 设置变体并锁定（命令/NBT 调用；finalizeSpawn 前未锁定则随机）。 */
     public void setVariant(Variant variant) {
         this.entityData.set(VARIANT_INDEX, variant.ordinal());
         this.variantLocked = true;
         this.bossBar.setName(Component.translatable(variant.nameKey()));
+        this.bossBar.setColor(variantPhaseColor(getPhase()));
     }
 
     @Override
     public Component getName() {
-        return Component.translatable(this.getVariant().nameKey());
+        return this.hasCustomName() ? super.getName() : Component.translatable(this.getVariant().nameKey());
     }
 
     public BossEvent.BossBarColor variantPhaseColor(int phase) {
@@ -203,18 +248,35 @@ public class HordeBoss extends Zombie {
     @Override
     public void tick() {
         super.tick();
+        if (this.getVariant() == Variant.INFERNO && this.isOnFire()) {
+            this.clearFire();
+        }
+        if (!this.level().isClientSide && this.isAlive()) {
+            if (!this.statsInitialized) {
+                initializeBossStatsOnce();
+            }
+            boolean activeTarget = this.getTarget() != null && this.getTarget().isAlive();
+            if (this.isAggressive() != activeTarget) {
+                this.setAggressive(activeTarget);
+            }
+        }
+        if (this.isAlive() && (this.isAggressive() || this.getTarget() != null || isExecutingAttack())) {
+            float yawDelta = Mth.wrapDegrees(this.yHeadRot - this.yBodyRot);
+            if (Math.abs(yawDelta) > 38.0F) {
+                this.yBodyRot += Mth.clamp(yawDelta, -18.0F, 18.0F);
+            }
+        }
         if (this.level() instanceof ServerLevel serverLevel && this.isAlive()) {
             this.bossBar.setProgress(this.getHealth() / Math.max(1.0F, this.getMaxHealth()));
-            this.bossBar.setVisible(SmartHordeConfig.BOSS_BAR_ENABLED.get());
+            this.bossBar.setVisible(SmartHordeConfig.isBossBarEnabledSafe());
             this.phaseManager.tick();
             spawnAura(serverLevel);
         }
     }
 
-    /** 变体光环粒子。 */
     private void spawnAura(ServerLevel level) {
         ParticleOptions particle = this.getVariant().auraParticle;
-        if (particle == null || !SmartHordeConfig.PARTICLES_ENABLED.get()
+        if (particle == null || !SmartHordeConfig.isParticlesEnabledSafe()
                 || this.tickCount % AURA_INTERVAL_TICKS != 0) {
             return;
         }
@@ -227,6 +289,10 @@ public class HordeBoss extends Zombie {
         return this.entityData.get(PHASE);
     }
 
+    public int getCurrentPhase() {
+        return getPhase();
+    }
+
     private void setPhase(int phase) {
         this.entityData.set(PHASE, phase);
     }
@@ -235,13 +301,12 @@ public class HordeBoss extends Zombie {
         return this.bossBar;
     }
 
-    /** BossPhaseManager 切阶段回调：BossBar 配色、攻速与仆从召唤（冷却 5 秒）。 */
     public void onPhaseChanged(int newPhase) {
         setPhase(newPhase);
         this.bossBar.setColor(variantPhaseColor(newPhase));
 
         if (!(this.level() instanceof ServerLevel serverLevel)
-                || !SmartHordeConfig.BOSS_SUMMONS_HORDE_ON_PHASE.get()) {
+                || (SmartHordeConfig.SPEC.isLoaded() && !SmartHordeConfig.BOSS_SUMMONS_HORDE_ON_PHASE.get())) {
             return;
         }
         if (this.tickCount - this.lastSummonTick < SUMMON_COOLDOWN_TICKS) {
@@ -251,32 +316,45 @@ public class HordeBoss extends Zombie {
 
         int minions = this.getVariant().minionsBase + newPhase * 2;
         BlockPos center = this.blockPosition();
-        HordeWaveSpawner.spawnWave(serverLevel, center, 0, minions, 6.0, 12.0);
+        var spawned = HordeWaveSpawner.spawnWave(serverLevel, center, newPhase, minions, 5.0, 11.0);
+        LivingEntity currentTarget = this.getTarget();
+        if (currentTarget != null && currentTarget.isAlive()) {
+            for (SmartZombie minion : spawned) {
+                minion.setTarget(currentTarget);
+            }
+        }
 
-        serverLevel.sendParticles(ParticleTypes.FLAME,
-                this.getX(), this.getY() + this.getBbHeight() * 0.6, this.getZ(),
-                Math.min(40, SmartHordeConfig.MAX_PARTICLES.get()), 1.2, 1.0, 1.2, 0.05);
-        serverLevel.playSound(null, this.getX(), this.getY(), this.getZ(),
-                ModSounds.BOSS_PHASE_CHANGE.get(), SoundSource.HOSTILE, 2.0F, 1.0F);
+        if (SmartHordeConfig.isParticlesEnabledSafe()) {
+            serverLevel.sendParticles(ParticleTypes.FLAME,
+                    this.getX(), this.getY() + this.getBbHeight() * 0.6, this.getZ(),
+                    Math.min(40, SmartHordeConfig.maxParticlesSafe()), 1.2, 1.0, 1.2, 0.05);
+        }
+        if (SmartHordeConfig.isSoundsEnabledSafe()) {
+            serverLevel.playSound(null, this.getX(), this.getY(), this.getZ(),
+                    ModSounds.BOSS_PHASE_CHANGE.get(), SoundSource.HOSTILE, 2.0F, 1.0F);
+        }
     }
 
-    /** 变体命中附加效果（MeleeAttackGoal 经 doHurtTarget 调用）。 */
     @Override
     public boolean doHurtTarget(Entity target) {
         boolean hurt = super.doHurtTarget(target);
-        if (!hurt || !(target instanceof LivingEntity living)) {
-            return hurt;
+        if (hurt && target instanceof LivingEntity living) {
+            applyVariantHitEffect(living);
         }
+        return hurt;
+    }
+
+    /** 施加变体命中附带效果（供普通攻击与招式化攻击共用）。 */
+    public void applyVariantHitEffect(LivingEntity living) {
         switch (this.getVariant().hitEffect) {
             case KNOCKBACK ->
                     living.knockback(0.8, this.getX() - living.getX(), this.getZ() - living.getZ());
             case POISON -> living.addEffect(new MobEffectInstance(MobEffects.POISON, 120, 0));
             case SLOWNESS -> living.addEffect(new MobEffectInstance(MobEffects.MOVEMENT_SLOWDOWN, 100, 1));
-            case FIRE -> living.setRemainingFireTicks(100);
+            case FIRE -> living.setRemainingFireTicks(Math.max(living.getRemainingFireTicks(), 100));
             case NONE -> {
             }
         }
-        return true;
     }
 
     // ---------------- 玩家可见性 / BossBar ----------------
@@ -312,8 +390,23 @@ public class HordeBoss extends Zombie {
     }
 
     @Override
+    public boolean canPickUpLoot() {
+        return false;
+    }
+
+    @Override
     public boolean isSunSensitive() {
         return false;
+    }
+
+    @Override
+    public boolean fireImmune() {
+        return this.getVariant() == Variant.INFERNO || super.fireImmune();
+    }
+
+    @Override
+    public boolean canFreeze() {
+        return this.getVariant() != Variant.FROST && super.canFreeze();
     }
 
     @Override
@@ -325,12 +418,17 @@ public class HordeBoss extends Zombie {
     public void addAdditionalSaveData(CompoundTag tag) {
         super.addAdditionalSaveData(tag);
         tag.putInt("Variant", this.getVariant().ordinal());
+        tag.putBoolean(TAG_STATS_INIT, this.statsInitialized);
+        this.phaseManager.saveToTag(tag);
     }
 
     @Override
     public void readAdditionalSaveData(CompoundTag tag) {
         super.readAdditionalSaveData(tag);
+        this.phaseManager.loadFromTag(tag);
+        setPhase(this.phaseManager.getPhase());
         setVariant(Variant.byOrdinal(tag.getInt("Variant")));
+        this.statsInitialized = tag.getBoolean(TAG_STATS_INIT);
     }
 
     public static boolean checkHordeBossSpawnRules(EntityType<HordeBoss> type, LevelAccessor level,
@@ -346,13 +444,32 @@ public class HordeBoss extends Zombie {
             setVariant(Variant.random(this.random));
         }
         SpawnGroupData data = super.finalizeSpawn(level, difficulty, reason, spawnData);
+        // 严禁原版 Zombie.finalizeSpawn 5% 概率将领主变成幼年小僵尸或穿戴随机皮甲
+        this.setBaby(false);
+        for (EquipmentSlot slot : EquipmentSlot.values()) {
+            this.setItemSlot(slot, ItemStack.EMPTY);
+            this.setDropChance(slot, 0.0F);
+        }
+
+        initializeBossStatsOnce();
+        return data;
+    }
+
+    private void initializeBossStatsOnce() {
+        if (this.statsInitialized) {
+            return;
+        }
+        this.statsInitialized = true;
+        this.setBaby(false);
         DifficultyManager.applyTo(this);
 
         Variant variant = this.getVariant();
+        double bossHpMul = SmartHordeConfig.SPEC.isLoaded()
+                ? SmartHordeConfig.BOSS_HEALTH_MULTIPLIER.get()
+                : 1.0;
         AttributeInstance health = this.getAttribute(Attributes.MAX_HEALTH);
         if (health != null) {
-            health.setBaseValue(health.getBaseValue()
-                    * SmartHordeConfig.BOSS_HEALTH_MULTIPLIER.get() * variant.healthMul);
+            health.setBaseValue(health.getBaseValue() * bossHpMul * variant.healthMul);
             this.setHealth(this.getMaxHealth());
         }
         scale(Attributes.ATTACK_DAMAGE, variant.damageMul);
@@ -361,7 +478,6 @@ public class HordeBoss extends Zombie {
         if (armor != null) {
             armor.setBaseValue(armor.getBaseValue() + variant.armorBonus);
         }
-        return data;
     }
 
     private void scale(net.minecraft.core.Holder<net.minecraft.world.entity.ai.attributes.Attribute> attribute,

@@ -28,6 +28,8 @@ public final class ModSounds {
             register("smart_dodge");
     public static final DeferredHolder<SoundEvent, SoundEvent> SMART_ATTACK =
             register("smart_attack");
+    public static final DeferredHolder<SoundEvent, SoundEvent> WAR_CRY =
+            register("war_cry");
 
     private ModSounds() {
     }
